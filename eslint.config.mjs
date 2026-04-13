@@ -20,6 +20,14 @@ export default [
   // Next.js flat config (includes TypeScript parser, react, etc.)
   ...nextConfig,
 
+  // Disable import/no-anonymous-default-export for config files
+  {
+    files: ["*.config.{ts,mjs,js}", "eslint.config.mjs"],
+    rules: {
+      "import/no-anonymous-default-export": "off",
+    },
+  },
+
   {
     files: ["**/*.{ts,tsx}"],
     ignores: ["lib/env.ts"],

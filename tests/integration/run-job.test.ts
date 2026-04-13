@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { beforeAll, describe, expect, it } from "vitest";
+import type { Database } from "@/lib/db/database.types";
 import { runJob } from "@/lib/pipeline/runJob";
 import { createServiceTestClient } from "@/tests/helpers/test-user";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/db/database.types";
 
 let svc: SupabaseClient<Database>;
 
@@ -12,14 +12,10 @@ beforeAll(() => {
 
 describe("runJob", () => {
   it("success path: pipeline_runs row transitions to status=success with metrics", async () => {
-    const result = await runJob(
-      "echo-test",
-      { message: "hi" },
-      async (ctx) => {
-        ctx.metric("echo_count", 1);
-        return { echo_count: 1 };
-      },
-    );
+    const result = await runJob("echo-test", { message: "hi" }, async (ctx) => {
+      ctx.metric("echo_count", 1);
+      return { echo_count: 1 };
+    });
 
     expect(result).toEqual({ echo_count: 1 });
 
@@ -41,13 +37,9 @@ describe("runJob", () => {
 
   it("failure path: pipeline_runs row transitions to status=failed with error_message", async () => {
     await expect(
-      runJob(
-        "fail-test",
-        {},
-        async () => {
-          throw new Error("boom");
-        },
-      ),
+      runJob("fail-test", {}, async () => {
+        throw new Error("boom");
+      }),
     ).rejects.toThrow("boom");
 
     // Find the pipeline_runs row

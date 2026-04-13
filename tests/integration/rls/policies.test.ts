@@ -1,19 +1,17 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { beforeAll, describe, expect, it } from "vitest";
+import type { Database } from "@/lib/db/database.types";
 import {
-  createTestUser,
   createAnonTestClient,
   createServiceTestClient,
+  createTestUser,
 } from "@/tests/helpers/test-user";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/db/database.types";
 
 // Shared state across test groups
 let svc: SupabaseClient<Database>;
 
 // Helper: create a published repo via service client
-async function createRepo(
-  status: Database["public"]["Enums"]["repo_status"] = "published",
-) {
+async function createRepo(status: Database["public"]["Enums"]["repo_status"] = "published") {
   const ghId = Math.floor(Math.random() * 1e9);
   const now = new Date().toISOString();
   const { data, error } = await svc
@@ -35,11 +33,7 @@ async function createRepo(
 }
 
 // Helper: create a review via service client (bypassing RLS)
-async function createReview(
-  repoId: string,
-  userId: string,
-  rating = 4,
-) {
+async function createReview(repoId: string, userId: string, rating = 4) {
   const { data, error } = await svc
     .from("reviews")
     .insert({
@@ -79,11 +73,7 @@ describe("user_profiles_select_all", () => {
     const { userId } = await createTestUser();
     const anon = createAnonTestClient();
 
-    const { data, error } = await anon
-      .from("user_profiles")
-      .select("id")
-      .eq("id", userId)
-      .single();
+    const { data, error } = await anon.from("user_profiles").select("id").eq("id", userId).single();
 
     expect(error).toBeNull();
     expect(data?.id).toBe(userId);
@@ -142,7 +132,7 @@ describe("user_profiles_update_own", () => {
     // Attempt to update a column the user doesn't have grant for
     const { error } = await client
       .from("user_profiles")
-      // @ts-ignore — intentionally updating a column the user lacks GRANT for
+      // @ts-expect-error — intentionally updating a column the user lacks GRANT for
       .update({ github_id: 999999 })
       .eq("id", userId);
 
@@ -157,10 +147,7 @@ describe("user_profiles_update_own", () => {
 // ─────────────────────────────────────────────────────────────────────
 describe("github_oauth_tokens (deny-all)", () => {
   it("allows service role to select", async () => {
-    const { data, error } = await svc
-      .from("github_oauth_tokens")
-      .select("user_id")
-      .limit(1);
+    const { data, error } = await svc.from("github_oauth_tokens").select("user_id").limit(1);
 
     expect(error).toBeNull();
     expect(data).toBeDefined();
@@ -169,10 +156,7 @@ describe("github_oauth_tokens (deny-all)", () => {
   it("denies authenticated user select", async () => {
     const { client } = await createTestUser();
 
-    const { data } = await client
-      .from("github_oauth_tokens")
-      .select("user_id")
-      .limit(1);
+    const { data } = await client.from("github_oauth_tokens").select("user_id").limit(1);
 
     expect(data).toHaveLength(0);
   });
@@ -183,10 +167,7 @@ describe("github_oauth_tokens (deny-all)", () => {
 // ─────────────────────────────────────────────────────────────────────
 describe("github_tokens (deny-all)", () => {
   it("allows service role to select", async () => {
-    const { data, error } = await svc
-      .from("github_tokens")
-      .select("id")
-      .limit(1);
+    const { data, error } = await svc.from("github_tokens").select("id").limit(1);
 
     expect(error).toBeNull();
     expect(data).toBeDefined();
@@ -195,10 +176,7 @@ describe("github_tokens (deny-all)", () => {
   it("denies authenticated user select", async () => {
     const { client } = await createTestUser();
 
-    const { data } = await client
-      .from("github_tokens")
-      .select("id")
-      .limit(1);
+    const { data } = await client.from("github_tokens").select("id").limit(1);
 
     expect(data).toHaveLength(0);
   });
@@ -212,11 +190,7 @@ describe("repos_select_published", () => {
     const repo = await createRepo("published");
     const { client } = await createTestUser();
 
-    const { data, error } = await client
-      .from("repos")
-      .select("id")
-      .eq("id", repo.id)
-      .single();
+    const { data, error } = await client.from("repos").select("id").eq("id", repo.id).single();
 
     expect(error).toBeNull();
     expect(data?.id).toBe(repo.id);
@@ -226,10 +200,7 @@ describe("repos_select_published", () => {
     const repo = await createRepo("pending");
     const { client } = await createTestUser();
 
-    const { data } = await client
-      .from("repos")
-      .select("id")
-      .eq("id", repo.id);
+    const { data } = await client.from("repos").select("id").eq("id", repo.id);
 
     expect(data).toHaveLength(0);
   });
@@ -238,10 +209,7 @@ describe("repos_select_published", () => {
     const repo = await createRepo("removed");
     const { client } = await createTestUser();
 
-    const { data } = await client
-      .from("repos")
-      .select("id")
-      .eq("id", repo.id);
+    const { data } = await client.from("repos").select("id").eq("id", repo.id);
 
     expect(data).toHaveLength(0);
   });
@@ -276,11 +244,11 @@ describe("repo_scores_select_latest_published", () => {
     const { data, error } = await client
       .from("repo_scores")
       .select("id")
-      .eq("id", score!.id)
+      .eq("id", score?.id)
       .single();
 
     expect(error).toBeNull();
-    expect(data?.id).toBe(score!.id);
+    expect(data?.id).toBe(score?.id);
   });
 
   it("denies seeing is_latest=false row", async () => {
@@ -305,10 +273,7 @@ describe("repo_scores_select_latest_published", () => {
 
     const { client } = await createTestUser();
 
-    const { data } = await client
-      .from("repo_scores")
-      .select("id")
-      .eq("id", score!.id);
+    const { data } = await client.from("repo_scores").select("id").eq("id", score?.id);
 
     expect(data).toHaveLength(0);
   });
@@ -335,10 +300,7 @@ describe("repo_scores_select_latest_published", () => {
 
     const { client } = await createTestUser();
 
-    const { data } = await client
-      .from("repo_scores")
-      .select("id")
-      .eq("id", score!.id);
+    const { data } = await client.from("repo_scores").select("id").eq("id", score?.id);
 
     expect(data).toHaveLength(0);
   });
@@ -358,11 +320,7 @@ describe("tags_select_all", () => {
 
     const { client } = await createTestUser();
 
-    const { data, error } = await client
-      .from("tags")
-      .select("slug")
-      .eq("slug", slug)
-      .single();
+    const { data, error } = await client.from("tags").select("slug").eq("slug", slug).single();
 
     expect(error).toBeNull();
     expect(data?.slug).toBe(slug);
@@ -385,16 +343,13 @@ describe("repo_tags_select_published", () => {
 
     await svc.from("repo_tags").insert({
       repo_id: repo.id,
-      tag_id: tag!.id,
+      tag_id: tag?.id,
       source: "ai",
     });
 
     const { client } = await createTestUser();
 
-    const { data, error } = await client
-      .from("repo_tags")
-      .select("tag_id")
-      .eq("repo_id", repo.id);
+    const { data, error } = await client.from("repo_tags").select("tag_id").eq("repo_id", repo.id);
 
     expect(error).toBeNull();
     expect(data).toHaveLength(1);
@@ -412,16 +367,13 @@ describe("repo_tags_select_published", () => {
 
     await svc.from("repo_tags").insert({
       repo_id: repo.id,
-      tag_id: tag!.id,
+      tag_id: tag?.id,
       source: "ai",
     });
 
     const { client } = await createTestUser();
 
-    const { data } = await client
-      .from("repo_tags")
-      .select("tag_id")
-      .eq("repo_id", repo.id);
+    const { data } = await client.from("repo_tags").select("tag_id").eq("repo_id", repo.id);
 
     expect(data).toHaveLength(0);
   });
@@ -442,10 +394,7 @@ describe("repo_assets_select_published", () => {
 
     const { client } = await createTestUser();
 
-    const { data, error } = await client
-      .from("repo_assets")
-      .select("id")
-      .eq("repo_id", repo.id);
+    const { data, error } = await client.from("repo_assets").select("id").eq("repo_id", repo.id);
 
     expect(error).toBeNull();
     expect(data).toHaveLength(1);
@@ -462,10 +411,7 @@ describe("repo_assets_select_published", () => {
 
     const { client } = await createTestUser();
 
-    const { data } = await client
-      .from("repo_assets")
-      .select("id")
-      .eq("repo_id", repo.id);
+    const { data } = await client.from("repo_assets").select("id").eq("repo_id", repo.id);
 
     expect(data).toHaveLength(0);
   });
@@ -486,10 +432,7 @@ describe("fork_events_select_own", () => {
       github_fork_url: "https://github.com/test/fork",
     });
 
-    const { data, error } = await client
-      .from("fork_events")
-      .select("id")
-      .eq("repo_id", repo.id);
+    const { data, error } = await client.from("fork_events").select("id").eq("repo_id", repo.id);
 
     expect(error).toBeNull();
     expect(data).toHaveLength(1);
@@ -507,10 +450,7 @@ describe("fork_events_select_own", () => {
       github_fork_url: "https://github.com/test/fork",
     });
 
-    const { data } = await userBClient
-      .from("fork_events")
-      .select("id")
-      .eq("repo_id", repo.id);
+    const { data } = await userBClient.from("fork_events").select("id").eq("repo_id", repo.id);
 
     expect(data).toHaveLength(0);
   });
@@ -527,11 +467,7 @@ describe("reviews_select_published", () => {
 
     const { client } = await createTestUser();
 
-    const { data, error } = await client
-      .from("reviews")
-      .select("id")
-      .eq("id", review.id)
-      .single();
+    const { data, error } = await client.from("reviews").select("id").eq("id", review.id).single();
 
     expect(error).toBeNull();
     expect(data?.id).toBe(review.id);
@@ -544,10 +480,7 @@ describe("reviews_select_published", () => {
 
     const { client } = await createTestUser();
 
-    const { data } = await client
-      .from("reviews")
-      .select("id")
-      .eq("id", review.id);
+    const { data } = await client.from("reviews").select("id").eq("id", review.id);
 
     expect(data).toHaveLength(0);
   });
@@ -594,18 +527,12 @@ describe("reviews_delete_own", () => {
     const repo = await createRepo("published");
     const review = await createReview(repo.id, userId);
 
-    const { error } = await client
-      .from("reviews")
-      .delete()
-      .eq("id", review.id);
+    const { error } = await client.from("reviews").delete().eq("id", review.id);
 
     expect(error).toBeNull();
 
     // Verify deleted via service
-    const { data } = await svc
-      .from("reviews")
-      .select("id")
-      .eq("id", review.id);
+    const { data } = await svc.from("reviews").select("id").eq("id", review.id);
 
     expect(data).toHaveLength(0);
   });
@@ -616,16 +543,10 @@ describe("reviews_delete_own", () => {
     const repo = await createRepo("published");
     const review = await createReview(repo.id, ownerUserId);
 
-    await otherClient
-      .from("reviews")
-      .delete()
-      .eq("id", review.id);
+    await otherClient.from("reviews").delete().eq("id", review.id);
 
     // Verify NOT deleted via service
-    const { data } = await svc
-      .from("reviews")
-      .select("id")
-      .eq("id", review.id);
+    const { data } = await svc.from("reviews").select("id").eq("id", review.id);
 
     expect(data).toHaveLength(1);
   });
@@ -672,10 +593,7 @@ describe("review_assets_select_public", () => {
 
     const { client } = await createTestUser();
 
-    const { data } = await client
-      .from("review_assets")
-      .select("id")
-      .eq("review_id", review.id);
+    const { data } = await client.from("review_assets").select("id").eq("review_id", review.id);
 
     expect(data).toHaveLength(0);
   });
@@ -738,10 +656,7 @@ describe("review_assets_delete_own", () => {
       .select("id")
       .single();
 
-    const { error } = await client
-      .from("review_assets")
-      .delete()
-      .eq("id", asset!.id);
+    const { error } = await client.from("review_assets").delete().eq("id", asset?.id);
 
     // If storage service is running, this succeeds cleanly (error is null).
     // If storage service is unavailable, the cleanup trigger fails with 42501.
@@ -752,10 +667,7 @@ describe("review_assets_delete_own", () => {
       expect(error.message).toContain("storage");
     } else {
       // Full success — verify row is gone
-      const { data } = await svc
-        .from("review_assets")
-        .select("id")
-        .eq("id", asset!.id);
+      const { data } = await svc.from("review_assets").select("id").eq("id", asset?.id);
 
       expect(data).toHaveLength(0);
     }
@@ -778,16 +690,10 @@ describe("review_assets_delete_own", () => {
       .select("id")
       .single();
 
-    await otherClient
-      .from("review_assets")
-      .delete()
-      .eq("id", asset!.id);
+    await otherClient.from("review_assets").delete().eq("id", asset?.id);
 
     // Verify NOT deleted (RLS blocks the delete silently — 0 rows affected)
-    const { data } = await svc
-      .from("review_assets")
-      .select("id")
-      .eq("id", asset!.id);
+    const { data } = await svc.from("review_assets").select("id").eq("id", asset?.id);
 
     expect(data).toHaveLength(1);
   });
@@ -798,10 +704,7 @@ describe("review_assets_delete_own", () => {
 // ─────────────────────────────────────────────────────────────────────
 describe("pipeline_runs (deny-all)", () => {
   it("allows service role to select", async () => {
-    const { data, error } = await svc
-      .from("pipeline_runs")
-      .select("id")
-      .limit(1);
+    const { data, error } = await svc.from("pipeline_runs").select("id").limit(1);
 
     expect(error).toBeNull();
     expect(data).toBeDefined();
@@ -816,10 +719,7 @@ describe("pipeline_runs (deny-all)", () => {
 
     const { client } = await createTestUser();
 
-    const { data } = await client
-      .from("pipeline_runs")
-      .select("id")
-      .limit(10);
+    const { data } = await client.from("pipeline_runs").select("id").limit(10);
 
     expect(data).toHaveLength(0);
   });

@@ -1,20 +1,15 @@
-import { describe, it, expect, beforeAll } from "vitest";
-import {
-  createTestUser,
-  createServiceTestClient,
-} from "@/tests/helpers/test-user";
-import { encryptToken } from "@/lib/crypto/tokens";
-import { createClient } from "@supabase/supabase-js";
-import { env } from "@/lib/env";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
+import { beforeAll, describe, expect, it } from "vitest";
+import { encryptToken } from "@/lib/crypto/tokens";
 import type { Database } from "@/lib/db/database.types";
+import { env } from "@/lib/env";
+import { createServiceTestClient, createTestUser } from "@/tests/helpers/test-user";
 
 let svc: SupabaseClient<Database>;
 
 // Helper: create a published repo via service client
-async function createRepo(
-  status: Database["public"]["Enums"]["repo_status"] = "published",
-) {
+async function createRepo(status: Database["public"]["Enums"]["repo_status"] = "published") {
   const ghId = Math.floor(Math.random() * 1e9);
   const now = new Date().toISOString();
   const { data, error } = await svc
