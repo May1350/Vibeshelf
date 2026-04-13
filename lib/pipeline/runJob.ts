@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/db/service-client"
 import { startSpan } from "./trace"
 import type { JobInput, JobOutput, JobContext } from "@/lib/types/jobs"
+import type { Json } from "@/lib/db/database.types"
 
 export async function runJob<I extends JobInput, O extends JobOutput>(
   jobName: string,
@@ -8,8 +9,7 @@ export async function runJob<I extends JobInput, O extends JobOutput>(
   fn: (ctx: JobContext) => Promise<O>,
   options?: { parentRunId?: string },
 ): Promise<O> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = createServiceClient() as any
+  const db = createServiceClient()
   const span = startSpan(`job:${jobName}`)
   const metrics: Record<string, number | string> = {}
 
@@ -19,7 +19,7 @@ export async function runJob<I extends JobInput, O extends JobOutput>(
       job_name: jobName,
       trace_id: span.traceId,
       parent_run_id: options?.parentRunId ?? null,
-      input: input as unknown as Record<string, unknown>,
+      input: input as unknown as Json,
       status: "running",
     })
     .select("id")
@@ -47,7 +47,7 @@ export async function runJob<I extends JobInput, O extends JobOutput>(
       .update({
         status: "success",
         finished_at: new Date().toISOString(),
-        metrics,
+        metrics: metrics as unknown as Json,
       })
       .eq("id", run.id)
 
@@ -61,8 +61,8 @@ export async function runJob<I extends JobInput, O extends JobOutput>(
         status: "failed",
         finished_at: new Date().toISOString(),
         error_message: error.message,
-        error_stack: error.stack,
-        metrics,
+        error_stack: error.stack ?? null,
+        metrics: metrics as unknown as Json,
       })
       .eq("id", run.id)
 

@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js"
+import type { SupabaseClient } from "@/lib/db"
 
 export type JobInput = Record<string, unknown>
 export type JobOutput = Record<string, unknown>
