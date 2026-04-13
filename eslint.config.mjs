@@ -1,4 +1,4 @@
-import nextPlugin from "@next/eslint-plugin-next"
+import nextConfig from "eslint-config-next";
 
 const processEnvSelectors = [
   {
@@ -9,10 +9,16 @@ const processEnvSelectors = [
     selector: "MemberExpression[object.name='process'][computed=true][property.value='env']",
     message: "Read env vars via `@/lib/env` only (computed access is also banned).",
   },
-]
+];
 
 export default [
-  nextPlugin.configs.recommended,
+  // Global ignores — must be a standalone object with only `ignores`
+  {
+    ignores: [".next/**", "node_modules/**"],
+  },
+
+  // Next.js flat config (includes TypeScript parser, react, etc.)
+  ...nextConfig,
 
   {
     files: ["**/*.{ts,tsx}"],
@@ -47,11 +53,17 @@ export default [
         "error",
         {
           patterns: [
-            { group: ["next", "next/*"], message: "Framework-free: use lib/types/ + plain TS only." },
-            { group: ["react", "react-*"], message: "Framework-free: no React inside lib/pipeline or lib/types." },
+            {
+              group: ["next", "next/*"],
+              message: "Framework-free: use lib/types/ + plain TS only.",
+            },
+            {
+              group: ["react", "react-*"],
+              message: "Framework-free: no React inside lib/pipeline or lib/types.",
+            },
           ],
         },
       ],
     },
   },
-]
+];

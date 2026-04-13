@@ -1,11 +1,12 @@
-import { defineConfig } from "vitest/config"
-import path from "node:path"
+import path from "node:path";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
     alias: { "@": path.resolve(__dirname, ".") },
   },
   test: {
+    globalSetup: "./vitest.setup.ts",
     environment: "node",
     env: {
       NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321",
@@ -16,4 +17,4 @@ export default defineConfig({
       GITHUB_CLIENT_SECRET: "test-client-secret",
     },
   },
-})
+});

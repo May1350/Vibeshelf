@@ -11,20 +11,41 @@ module.exports = {
       comment: "DFL rule 1: pipeline must not import from app/",
     },
     {
-      name: "no-pipeline-imports-framework",
+      name: "no-pipeline-imports-next",
       severity: "error",
       from: { path: "^lib/pipeline/" },
-      to: { path: "^(next|react)(/.*)?$" },
-      comment: "DFL rule 1: pipeline is framework-free",
+      to: { path: "/node_modules/next/" },
+      comment: "DFL rule 1: pipeline must not import from next",
+    },
+    {
+      name: "no-pipeline-imports-react",
+      severity: "error",
+      from: { path: "^lib/pipeline/" },
+      to: { path: "/node_modules/react/" },
+      comment: "DFL rule 1: pipeline must not import from react",
     },
 
     // ─── DFL rule 3 — lib/types/ is framework-free ───────────────────
     {
-      name: "no-types-imports-framework",
+      name: "no-types-imports-next",
       severity: "error",
       from: { path: "^lib/types/" },
-      to: { path: "^(next|react|server-only)(/.*)?$" },
-      comment: "DFL rule 3: shared types must not depend on framework",
+      to: { path: "/node_modules/next/" },
+      comment: "DFL rule 3: shared types must not depend on next",
+    },
+    {
+      name: "no-types-imports-react",
+      severity: "error",
+      from: { path: "^lib/types/" },
+      to: { path: "/node_modules/react/" },
+      comment: "DFL rule 3: shared types must not depend on react",
+    },
+    {
+      name: "no-types-imports-server-only",
+      severity: "error",
+      from: { path: "^lib/types/" },
+      to: { path: "/node_modules/server-only/" },
+      comment: "DFL rule 3: shared types must not depend on server-only",
     },
 
     // ─── DFL rule 9 — no cache directives in pipeline ────────────────
@@ -32,7 +53,7 @@ module.exports = {
       name: "no-pipeline-cache-directives",
       severity: "error",
       from: { path: "^lib/pipeline/" },
-      to: { path: "^next/cache$" },
+      to: { path: "/node_modules/next/cache" },
       comment: "DFL rule 9: pipeline must not use Next.js cache APIs",
     },
 
@@ -45,7 +66,8 @@ module.exports = {
         pathNot: "^lib/pipeline/.*\\.test\\.",
       },
       to: { path: "^@supabase/supabase-js$" },
-      comment: "DFL rule 2: pipeline imports DB client from lib/db/, not @supabase/supabase-js directly",
+      comment:
+        "DFL rule 2: pipeline imports DB client from lib/db/, not @supabase/supabase-js directly",
     },
 
     // ─── DFL rule 8 — Storage boundary ───────────────────────────────
@@ -62,7 +84,8 @@ module.exports = {
       severity: "error",
       from: { pathNot: "^lib/(storage|db)/" },
       to: { path: "^@supabase/supabase-js$", dependencyTypes: ["import"] },
-      comment: "DFL rule 8 + rule 2: @supabase/supabase-js importable only from lib/db/ and lib/storage/",
+      comment:
+        "DFL rule 8 + rule 2: @supabase/supabase-js importable only from lib/db/ and lib/storage/",
     },
 
     // ─── Foundation rule F1 — service_role client scope ──────────────
@@ -76,7 +99,8 @@ module.exports = {
       severity: "error",
       from: { path: "^app/" },
       to: { path: "^lib/db/service-client" },
-      comment: "F1: createServiceClient is server-only; imported only from lib/pipeline/runJob.ts (never from app/)",
+      comment:
+        "F1: createServiceClient is server-only; imported only from lib/pipeline/runJob.ts (never from app/)",
     },
 
     // ─── Foundation rule F2 — crypto/ import scope ───────────────────
@@ -109,7 +133,8 @@ module.exports = {
       severity: "error",
       from: { path: "^lib/pipeline/jobs/" },
       to: { path: "^lib/db/service-client" },
-      comment: "F4: pipeline jobs access DB via ctx.db only (runJob owns the single service-role client)",
+      comment:
+        "F4: pipeline jobs access DB via ctx.db only (runJob owns the single service-role client)",
     },
   ],
 
@@ -121,4 +146,4 @@ module.exports = {
       conditionNames: ["import", "require", "node", "default"],
     },
   },
-}
+};
