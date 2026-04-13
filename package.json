@@ -3,10 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "biome check && eslint . --ignore-pattern '**/__fixtures__/**' && depcruise -c dependency-cruiser.cjs --exclude '__fixtures__' lib/ app/",
+    "lint:neg:depcruise": "! depcruise -c dependency-cruiser.cjs lib/pipeline/__fixtures__/bad-pipeline-import.ts 2>/dev/null",
+    "lint:neg:eslint": "! eslint lib/__fixtures__/bad-process-env.ts 2>/dev/null",
+    "lint:neg": "pnpm lint:neg:depcruise && pnpm lint:neg:eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run tests/unit tests/integration",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "playwright test",
+    "db:reset": "supabase db reset",
+    "db:types": "supabase gen types typescript --local > lib/db/database.types.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
@@ -24,6 +34,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.11",
     "@next/eslint-plugin-next": "^16.2.3",
     "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",
