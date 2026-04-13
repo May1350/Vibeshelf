@@ -138,8 +138,8 @@ describe("get_my_oauth_token_encrypted", () => {
 
     expect(error).toBeNull();
     expect(data).toHaveLength(1);
-    expect(data![0].token_key_version).toBe(1);
-    expect(data![0].scopes).toContain("public_repo");
+    expect(data?.[0]?.token_key_version).toBe(1);
+    expect(data?.[0]?.scopes).toContain("public_repo");
   });
 
   it("raises P0002 when no token exists", async () => {

@@ -1,7 +1,7 @@
-import { createServiceClient } from "@/lib/db/service-client"
-import { startSpan } from "./trace"
-import type { JobInput, JobOutput, JobContext } from "@/lib/types/jobs"
-import type { Json } from "@/lib/db/database.types"
+import type { Json } from "@/lib/db/database.types";
+import { createServiceClient } from "@/lib/db/service-client";
+import type { JobContext, JobInput, JobOutput } from "@/lib/types/jobs";
+import { startSpan } from "./trace";
 
 export async function runJob<I extends JobInput, O extends JobOutput>(
   jobName: string,
@@ -9,9 +9,9 @@ export async function runJob<I extends JobInput, O extends JobOutput>(
   fn: (ctx: JobContext) => Promise<O>,
   options?: { parentRunId?: string },
 ): Promise<O> {
-  const db = createServiceClient()
-  const span = startSpan(`job:${jobName}`)
-  const metrics: Record<string, number | string> = {}
+  const db = createServiceClient();
+  const span = startSpan(`job:${jobName}`);
+  const metrics: Record<string, number | string> = {};
 
   const { data: run, error: insertErr } = await db
     .from("pipeline_runs")
@@ -23,24 +23,24 @@ export async function runJob<I extends JobInput, O extends JobOutput>(
       status: "running",
     })
     .select("id")
-    .single()
+    .single();
 
-  if (insertErr || !run) throw insertErr ?? new Error("Failed to create pipeline_runs row")
+  if (insertErr || !run) throw insertErr ?? new Error("Failed to create pipeline_runs row");
 
   const ctx: JobContext = {
     runId: run.id,
     parentRunId: options?.parentRunId ?? null,
     db,
     metric(name, value) {
-      metrics[name] = value
+      metrics[name] = value;
     },
     async spawn(childName, childInput, childFn) {
-      return runJob(childName, childInput, childFn, { parentRunId: run.id })
+      return runJob(childName, childInput, childFn, { parentRunId: run.id });
     },
-  }
+  };
 
   try {
-    const result = await fn(ctx)
+    const result = await fn(ctx);
 
     await db
       .from("pipeline_runs")
@@ -49,12 +49,12 @@ export async function runJob<I extends JobInput, O extends JobOutput>(
         finished_at: new Date().toISOString(),
         metrics: metrics as unknown as Json,
       })
-      .eq("id", run.id)
+      .eq("id", run.id);
 
-    span.end()
-    return result
+    span.end();
+    return result;
   } catch (err) {
-    const error = err instanceof Error ? err : new Error(String(err))
+    const error = err instanceof Error ? err : new Error(String(err));
     await db
       .from("pipeline_runs")
       .update({
@@ -64,10 +64,10 @@ export async function runJob<I extends JobInput, O extends JobOutput>(
         error_stack: error.stack ?? null,
         metrics: metrics as unknown as Json,
       })
-      .eq("id", run.id)
+      .eq("id", run.id);
 
-    span.recordException(err)
-    span.end()
-    throw err
+    span.recordException(err);
+    span.end();
+    throw err;
   }
 }

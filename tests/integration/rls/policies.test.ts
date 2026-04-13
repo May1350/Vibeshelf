@@ -142,7 +142,8 @@ describe("user_profiles_update_own", () => {
     // Attempt to update a column the user doesn't have grant for
     const { error } = await client
       .from("user_profiles")
-      .update({ github_id: 999999 } as Record<string, unknown>)
+      // @ts-ignore — intentionally updating a column the user lacks GRANT for
+      .update({ github_id: 999999 })
       .eq("id", userId);
 
     // PostgREST returns 42501 (permission denied) for column-level grant violations
@@ -567,7 +568,7 @@ describe("reviews_update_own", () => {
 
     expect(error).toBeNull();
     expect(data).toHaveLength(1);
-    expect(data![0].text_body).toBe("Updated review text");
+    expect(data?.[0]?.text_body).toBe("Updated review text");
   });
 
   it("denies user updating another user's review", async () => {

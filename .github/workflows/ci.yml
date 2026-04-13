@@ -1,0 +1,210 @@
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Split concurrency: cancel stale PR runs but never cancel a main deploy mid-flight.
+# A canceled `vercel deploy --prebuilt` may leave prod in a partial state.
+concurrency:
+  group: ${{ github.ref == 'refs/heads/main' && 'deploy-main' || format('ci-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  PNPM_VERSION: "9.12.0"
+  NODE_VERSION: "22"
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+  lint:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+
+  lint-neg:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint:neg
+
+  typecheck:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  unit:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:unit
+
+  db-integration:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - name: Restore Supabase Docker image cache
+        id: docker-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/supabase-images.tar.gz
+          key: docker-supabase-${{ hashFiles('supabase/config.toml') }}
+      - name: Load cached Docker images
+        if: steps.docker-cache.outputs.cache-hit == 'true'
+        run: gunzip -c /tmp/supabase-images.tar.gz | docker load
+      - name: Start Supabase stack
+        run: supabase start
+      - name: Save Docker images to cache (first run only)
+        if: steps.docker-cache.outputs.cache-hit != 'true'
+        run: docker save $(docker images --format '{{.Repository}}:{{.Tag}}' | grep -v '<none>') | gzip > /tmp/supabase-images.tar.gz
+      - name: Populate .env.test.local
+        env:
+          TOKEN_KEY: ${{ secrets.TEST_TOKEN_ENCRYPTION_KEY_V1 }}
+        run: |
+          set -euo pipefail
+          SRK=$(supabase status -o json | jq -r '.SERVICE_ROLE_KEY')
+          ANON=$(supabase status -o json | jq -r '.ANON_KEY')
+          URL=$(supabase status -o json | jq -r '.API_URL')
+          printf '%s\n' \
+            "NEXT_PUBLIC_SUPABASE_URL=$URL" \
+            "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON" \
+            "SUPABASE_SERVICE_ROLE_KEY=$SRK" \
+            "TOKEN_ENCRYPTION_KEY_V1=$TOKEN_KEY" \
+            "GITHUB_CLIENT_ID=test-client-id" \
+            "GITHUB_CLIENT_SECRET=test-client-secret" \
+            > .env.test.local
+          chmod 600 .env.test.local
+      - name: Reset database (replays all migrations)
+        run: supabase db reset --no-seed
+      - name: Generate and diff database types
+        run: |
+          set -euo pipefail
+          pnpm exec supabase gen types typescript --local > /tmp/database.types.ts
+          [ -s /tmp/database.types.ts ] || { echo "Generated types file is empty"; exit 1; }
+          diff /tmp/database.types.ts lib/db/database.types.ts
+      - name: Run integration tests
+        run: pnpm test:integration
+      - if: always()
+        run: supabase stop
+
+  e2e:
+    needs: [setup, db-integration]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: supabase/setup-cli@v1
+      - run: supabase start
+      - name: Populate .env.local
+        env:
+          TOKEN_KEY: ${{ secrets.TEST_TOKEN_ENCRYPTION_KEY_V1 }}
+        run: |
+          set -euo pipefail
+          SRK=$(supabase status -o json | jq -r '.SERVICE_ROLE_KEY')
+          ANON=$(supabase status -o json | jq -r '.ANON_KEY')
+          URL=$(supabase status -o json | jq -r '.API_URL')
+          printf '%s\n' \
+            "NEXT_PUBLIC_SUPABASE_URL=$URL" \
+            "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON" \
+            "SUPABASE_SERVICE_ROLE_KEY=$SRK" \
+            "TOKEN_ENCRYPTION_KEY_V1=$TOKEN_KEY" \
+            "GITHUB_CLIENT_ID=test-client-id" \
+            "GITHUB_CLIENT_SECRET=test-client-secret" \
+            > .env.local
+          chmod 600 .env.local
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm build
+      - name: Start app server in background
+        run: |
+          pnpm start > /tmp/next-server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+      - name: Wait for server ready
+        run: |
+          kill -0 $SERVER_PID || { cat /tmp/next-server.log; exit 1; }
+          npx wait-on http://localhost:3000 --timeout 120000
+      - run: pnpm test:e2e
+      - name: Cleanup
+        if: always()
+        run: |
+          kill $SERVER_PID || true
+          supabase stop
+
+  # Production deploy is TAG-TRIGGERED, not auto-promoted on every main push.
+  # This gives the operator a gate to run the manual migration workflow first.
+  # See db-migrate-prod.yml below.
+  deploy:
+    needs: [lint, lint-neg, typecheck, unit, db-integration, e2e]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install -g vercel@latest
+      # Use a project-scoped Vercel token (not a personal account token)
+      # to limit blast radius — leaked token can only affect this project.
+      - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
