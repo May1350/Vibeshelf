@@ -23,6 +23,7 @@ import { extractReadmeMedia } from "@/lib/pipeline/extractors/readme-media";
 import type { ExtractedTag } from "@/lib/pipeline/extractors/tech-stack";
 import { extractTechStack } from "@/lib/pipeline/extractors/tech-stack";
 import { extractVibecodingCompat } from "@/lib/pipeline/extractors/vibecoding-compat";
+import { rpcAcquirePipelineLock, rpcReleasePipelineLock } from "@/lib/pipeline/github/db-rpc";
 import type {
   FetchRepoDetailsResult,
   RepoDetails,
@@ -336,13 +337,13 @@ async function filterExistingRepos(
 }
 
 async function acquireLock(ctx: JobContext): Promise<boolean> {
-  const { data, error } = await ctx.db.rpc("acquire_pipeline_lock", { lock_key: "discover" });
+  const { data, error } = await rpcAcquirePipelineLock(ctx.db, "discover");
   if (error) throw new Error(`discoverJob: acquire_pipeline_lock failed: ${error.message}`);
   return data === true;
 }
 
 async function releaseLock(ctx: JobContext): Promise<void> {
-  const { error } = await ctx.db.rpc("release_pipeline_lock", { lock_key: "discover" });
+  const { error } = await rpcReleasePipelineLock(ctx.db, "discover");
   if (error) {
     console.warn(`[discoverJob] release_pipeline_lock failed: ${error.message}`);
   }

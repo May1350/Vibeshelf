@@ -23,6 +23,7 @@
 
 import { decryptToken } from "@/lib/crypto/tokens";
 import type { SupabaseClient } from "@/lib/db";
+import { rpcAcquireGithubToken } from "./db-rpc";
 
 export type TokenScope = "search" | "rest" | "graphql";
 
@@ -41,20 +42,14 @@ export async function acquireToken(
   db: SupabaseClient,
   scope: TokenScope,
 ): Promise<AcquiredToken | null> {
-  const { data, error } = await db.rpc("acquire_github_token", { p_scope: scope });
+  const { data, error } = await rpcAcquireGithubToken(db, scope);
 
   if (error) {
     throw new Error(`token-pool: acquire_github_token RPC failed: ${error.message}`);
   }
 
   // RPC returns an array (table-returning function); empty = pool exhausted.
-  const rows = (data ?? []) as Array<{
-    id: string;
-    token_encrypted: string;
-    token_key_version: number;
-    remaining: number | null;
-    reset_at: string | null;
-  }>;
+  const rows = data ?? [];
 
   const row = rows[0];
   if (!row) return null;

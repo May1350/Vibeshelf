@@ -4,6 +4,7 @@
 // no extractors, no fan-out. Runs as a single pipeline_run with an
 // advisory lock to prevent overlap with manual retriggers.
 
+import { rpcAcquirePipelineLock, rpcReleasePipelineLock } from "@/lib/pipeline/github/db-rpc";
 import type { JobContext } from "@/lib/types/jobs";
 
 const DORMANT_THRESHOLD_MS = 365 * 24 * 60 * 60 * 1000;
@@ -56,13 +57,13 @@ export async function dormantJob(
 // ──────────────────────────────────────────────────────────────────────
 
 async function acquireLock(ctx: JobContext): Promise<boolean> {
-  const { data, error } = await ctx.db.rpc("acquire_pipeline_lock", { lock_key: "dormant" });
+  const { data, error } = await rpcAcquirePipelineLock(ctx.db, "dormant");
   if (error) throw new Error(`dormantJob: acquire_pipeline_lock failed: ${error.message}`);
   return data === true;
 }
 
 async function releaseLock(ctx: JobContext): Promise<void> {
-  const { error } = await ctx.db.rpc("release_pipeline_lock", { lock_key: "dormant" });
+  const { error } = await rpcReleasePipelineLock(ctx.db, "dormant");
   if (error) {
     // Never throw from a finally that's cleaning up — just log. The
     // advisory lock will be released automatically at session end.

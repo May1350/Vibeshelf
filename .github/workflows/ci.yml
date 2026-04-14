@@ -130,6 +130,7 @@ jobs:
             "TOKEN_ENCRYPTION_KEY_V1=$TOKEN_KEY" \
             "GITHUB_CLIENT_ID=test-client-id" \
             "GITHUB_CLIENT_SECRET=test-client-secret" \
+            "CRON_SECRET=test-cron-secret" \
             > .env.test.local
           chmod 600 .env.test.local
       - name: Reset database (replays all migrations)

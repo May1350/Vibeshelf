@@ -29,6 +29,7 @@
 // history linkable even after a repo is delisted.
 
 import { githubFetch } from "@/lib/pipeline/github/client";
+import { rpcAcquirePipelineLock, rpcReleasePipelineLock } from "@/lib/pipeline/github/db-rpc";
 import {
   LegallyUnavailableError,
   NotFoundError,
@@ -316,13 +317,13 @@ async function fetchReadmeSha(
 }
 
 async function acquireLock(ctx: JobContext): Promise<boolean> {
-  const { data, error } = await ctx.db.rpc("acquire_pipeline_lock", { lock_key: "refresh" });
+  const { data, error } = await rpcAcquirePipelineLock(ctx.db, "refresh");
   if (error) throw new Error(`refreshJob: acquire_pipeline_lock failed: ${error.message}`);
   return data === true;
 }
 
 async function releaseLock(ctx: JobContext): Promise<void> {
-  const { error } = await ctx.db.rpc("release_pipeline_lock", { lock_key: "refresh" });
+  const { error } = await rpcReleasePipelineLock(ctx.db, "refresh");
   if (error) {
     console.warn(`[refreshJob] release_pipeline_lock failed: ${error.message}`);
   }
