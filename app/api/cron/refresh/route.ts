@@ -3,7 +3,8 @@ import { env } from "@/lib/env";
 import { refreshJob } from "@/lib/pipeline/jobs/refresh";
 import { runJob } from "@/lib/pipeline/runJob";
 
-export const runtime = "nodejs";
+// Node runtime is the default in Next 16; an explicit `runtime` export
+// is incompatible with `cacheComponents`.
 export const maxDuration = 300;
 
 export async function GET(req: Request): Promise<Response> {

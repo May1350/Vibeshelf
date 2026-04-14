@@ -2,7 +2,8 @@ import { env } from "@/lib/env";
 import { dormantJob } from "@/lib/pipeline/jobs/dormant";
 import { runJob } from "@/lib/pipeline/runJob";
 
-export const runtime = "nodejs";
+// Node runtime is the default in Next 16; an explicit `runtime` export
+// is incompatible with `cacheComponents`.
 // Dormant is a single SQL UPDATE — 60s is ample even on Hobby.
 export const maxDuration = 60;
 

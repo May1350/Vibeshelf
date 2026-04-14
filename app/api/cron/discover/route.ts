@@ -6,7 +6,8 @@ import { runJob } from "@/lib/pipeline/runJob";
 // Cron routes need the Node runtime — lib/crypto/tokens uses
 // node:crypto (AES-256-GCM for the GitHub token pool) and the pipeline
 // makes long-lived fetches that Edge's isolate model isn't suited for.
-export const runtime = "nodejs";
+// Node runtime is the default in Next 16; an explicit `runtime` export
+// is incompatible with `cacheComponents` (see next.config.ts).
 
 // Hobby plan: 60s, Pro: 300s. We set 300 so Pro uses the full budget;
 // on Hobby Vercel silently caps at 60s and the job's internal

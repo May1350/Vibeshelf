@@ -5,7 +5,8 @@ import { runJob } from "@/lib/pipeline/runJob";
 
 // Node runtime needed — GeminiClient uses @google/genai (Node SDK),
 // and lib/crypto/tokens uses node:crypto for the GitHub token pool.
-export const runtime = "nodejs";
+// Node runtime is the default in Next 16; an explicit `runtime` export
+// is incompatible with `cacheComponents`.
 
 // Pro 300s budget. On Hobby Vercel silently caps at 60s; internal budget
 // won't fire (function is killed first). Acceptable trade-off for MVP —
