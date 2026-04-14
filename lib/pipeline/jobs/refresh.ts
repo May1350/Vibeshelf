@@ -46,6 +46,47 @@ import type { JobContext } from "@/lib/types/jobs";
 const DEFAULT_BUDGET_MS = 250_000;
 const DEFAULT_BATCH_SIZE = 50;
 
+// Circuit breaker: guard against a catastrophic mass-removal. If a
+// pipeline bug (license-allowlist regression, 404-from-GitHub-outage,
+// rename-detection miscomputing full_name, etc.) would flip too many
+// live repos to `status='removed'` in one run, abort BEFORE applying
+// the removal that would trip the threshold.
+//
+// Dual gate (OR-semantic — either trips):
+//   - ABSOLUTE: hard cap on total removals per run. A true catastrophe
+//     (all-404 from an outage, token-scope revoked) is bounded regardless
+//     of catalog size.
+//   - RATIO: after a statistically-meaningful sample (MIN_PROCESSED),
+//     abort if the removal fraction exceeds MAX_REMOVAL_RATIO. Catches
+//     a pervasive regression even below the absolute cap.
+//
+// Worst-case committed removals before the breaker trips: MAX_ABSOLUTE.
+// At defaults (10), re-publishing by hand is a trivial UPDATE.
+//
+// On trip: runJob's top-level catch writes pipeline_runs.status='failed'
+// with the error message. Cache tags are NOT revalidated on the error
+// path — Cache Components serves the previous list/facets for up to
+// cacheLife('hours'), so the marketplace never reflects a partially-
+// wiped catalog (safer than post-trip revalidation).
+const MAX_ABSOLUTE_REMOVALS = 10;
+const MAX_REMOVAL_RATIO = 0.1;
+const MIN_PROCESSED_BEFORE_RATIO_CHECK = 20;
+
+export class ExcessiveRemovalError extends Error {
+  constructor(
+    readonly removed: number,
+    readonly processed: number,
+    readonly reason: "absolute-cap" | "ratio-exceeded",
+  ) {
+    const pct = processed > 0 ? ((removed / processed) * 100).toFixed(1) : "n/a";
+    super(
+      `refreshJob circuit breaker (${reason}): would-be-removed=${removed}/${processed} ` +
+        `(${pct}%) — aborting`,
+    );
+    this.name = "ExcessiveRemovalError";
+  }
+}
+
 export interface RefreshInput {
   readonly maxRuntimeMs?: number;
   readonly batchSize?: number;
@@ -116,6 +157,14 @@ export async function refreshJob(
 
   let reposRefreshed = 0;
   let reposRemoved = 0;
+  // reposProcessed is incremented for every per-row iteration, regardless
+  // of outcome (refresh success, readme-change, remove-intent, OR a
+  // non-fatal error that consumed the row without producing a counter
+  // bump). This is the correct denominator for the circuit-breaker ratio
+  // — using `reposRefreshed + reposRemoved` would undercount rows that
+  // errored into the non-fatal catch, which skews the ratio upward and
+  // could false-trip during a transient-error storm.
+  let reposProcessed = 0;
   let readmesChanged = 0;
   let batchesProcessed = 0;
   let timedOut = false;
@@ -140,28 +189,53 @@ export async function refreshJob(
           timedOut = true;
           break;
         }
+
+        // refreshOne returns the INTENT, not the applied result. The
+        // circuit-breaker check runs in this loop BEFORE setRemoved is
+        // called, so we never commit the removal that would trip.
+        let outcome: RefreshOutcome;
         try {
-          const outcome = await refreshOne(ctx, repo);
-          if (outcome === "removed") {
-            reposRemoved += 1;
-            changedIds.push(repo.id);
-          } else if (outcome === "readme-changed") {
-            readmesChanged += 1;
-            reposRefreshed += 1;
-            changedIds.push(repo.id);
-          } else {
-            reposRefreshed += 1;
-            changedIds.push(repo.id);
-          }
+          outcome = await refreshOne(ctx, repo);
         } catch (err) {
-          // Propagate pool-wide errors — rest of the batch can't
-          // succeed either.
+          reposProcessed += 1; // errored row still consumed the iteration
           if (isFatalPoolError(err)) throw err;
           console.warn(
             `[refreshJob] ${repo.owner}/${repo.name}: non-fatal error, skipping: ${
               err instanceof Error ? err.message : String(err)
             }`,
           );
+          continue;
+        }
+        reposProcessed += 1;
+
+        if (outcome === "remove") {
+          // Prospective-ratio circuit breaker: evaluate the ratio AFTER
+          // applying this removal; if it would trip the threshold, abort
+          // before setRemoved actually runs.
+          const wouldBeRemoved = reposRemoved + 1;
+          const exceedsAbsolute = wouldBeRemoved > MAX_ABSOLUTE_REMOVALS;
+          const exceedsRatio =
+            reposProcessed >= MIN_PROCESSED_BEFORE_RATIO_CHECK &&
+            wouldBeRemoved / reposProcessed > MAX_REMOVAL_RATIO;
+          if (exceedsAbsolute || exceedsRatio) {
+            const reason = exceedsAbsolute ? "absolute-cap" : "ratio-exceeded";
+            ctx.metric("removal_ratio_breaker_tripped", 1);
+            ctx.metric(
+              "removal_ratio_pct",
+              Math.round((wouldBeRemoved / reposProcessed) * 1000) / 10,
+            );
+            throw new ExcessiveRemovalError(wouldBeRemoved, reposProcessed, reason);
+          }
+          await setRemoved(ctx, repo.id);
+          reposRemoved += 1;
+          changedIds.push(repo.id);
+        } else if (outcome === "readme-changed") {
+          readmesChanged += 1;
+          reposRefreshed += 1;
+          changedIds.push(repo.id);
+        } else {
+          reposRefreshed += 1;
+          changedIds.push(repo.id);
         }
       }
 
@@ -202,7 +276,11 @@ export async function refreshJob(
 // Per-repo refresh
 // ──────────────────────────────────────────────────────────────────────
 
-type RefreshOutcome = "refreshed" | "readme-changed" | "removed";
+// "remove" is the REMOVAL INTENT — the caller runs the circuit breaker
+// check before actually calling setRemoved. Using a distinct vocabulary
+// from "removed" (past tense / applied) prevents future edits from
+// re-introducing the inline removal that bypasses the breaker.
+type RefreshOutcome = "refreshed" | "readme-changed" | "remove";
 
 async function refreshOne(ctx: JobContext, repo: RepoRow): Promise<RefreshOutcome> {
   let rawRepo: RawRepoResponse;
@@ -214,16 +292,14 @@ async function refreshOne(ctx: JobContext, repo: RepoRow): Promise<RefreshOutcom
     );
     rawRepo = data as RawRepoResponse;
   } catch (err) {
-    // Not-found / legally-unavailable → remove from marketplace.
+    // Not-found / legally-unavailable → signal removal intent.
     if (err instanceof NotFoundError || err instanceof LegallyUnavailableError) {
-      await setRemoved(ctx, repo.id);
-      return "removed";
+      return "remove";
     }
     // Permission-denied usually means the repo went private. Treat as
-    // removed for marketplace purposes.
+    // a removal for marketplace purposes.
     if (err instanceof PermissionError) {
-      await setRemoved(ctx, repo.id);
-      return "removed";
+      return "remove";
     }
     throw err;
   }
@@ -231,8 +307,7 @@ async function refreshOne(ctx: JobContext, repo: RepoRow): Promise<RefreshOutcom
   // License-flip detection.
   const licenseSpdx = rawRepo.license?.spdx_id?.toLowerCase() ?? null;
   if (!isLicenseAllowed(licenseSpdx)) {
-    await setRemoved(ctx, repo.id);
-    return "removed";
+    return "remove";
   }
 
   // Rename detection: if full_name differs, GitHub already redirected

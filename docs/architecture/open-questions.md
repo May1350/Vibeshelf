@@ -21,16 +21,27 @@
 
 ## Q-02. MVP scope — Pro tier inclusion (PRD §10)
 
-**Status:** Deferred. User has not yet confirmed whether to follow the PRD's W4 Pro-inclusion plan or cut it.
+**Status:** **Recommendation tabled 2026-04-14 — awaiting user sign-off before SP#5 brainstorming opens.** Recommendation: Option 2 (Cut Pro from MVP).
 
-**Background:** PRD §10 schedules Stripe + brand matching + playbook generation for week 4. Reviewer R2 (codex-rescue) explicitly flagged this as unrealistic because week 4 piles new features on top of unfinished pipeline accuracy work, OAuth flows, review moderation, and screenshot reliability from earlier weeks.
+**Burn-rate reality check (SP#4 post-merge review):**
 
-**Options:**
-1. **Follow PRD as written** — Pro tier in 4-week MVP.
-2. **Cut Pro from MVP** — launch Free tier only, use month 2 for pipeline quality + security hardening, add Pro in month 3.
-3. **Pro with reduced scope** — brand matching only, playbook post-launch; or playbook only, brand matching post-launch.
+- SP#1 Foundation → 2026-04-11 (Week 1, on schedule)
+- SP#2 Ingestion → 2026-04-14 (Week 2, on schedule)
+- SP#3 Evaluation+Classification → 2026-04-14 (Week 2 tail, compressed)
+- SP#4 Marketplace UI Free → 2026-04-14 (Week 2 tail, compressed)
+- **SP#5 Identity+Fork+Reviews (OAuth + fork API + reviews table + moderation queue)** → realistically 1.5–2 weeks → lands ≈ 2026-04-28 to 2026-05-05
+- **SP#6 Pro tier (Stripe + brand_profiles + subscriptions + playbooks + CSS-var detection + iframe strategy per Q-03)** → 2–3 weeks minimum
 
-**Re-open when:** Before starting sub-project #5 brainstorming (Identity+Fork+Reviews). By that point we will know whether sub-projects #1-4 fit within their W1-W3 budget. If they don't, the Pro decision becomes forced.
+PRD W4 target is 2026-05-09. SP#5 consumes the remaining budget with ~zero slack; Pro-tier work can't reasonably start until 2026-05-05 earliest, i.e. 4 days before the target. Option 1 is infeasible without cutting quality elsewhere (OAuth, review moderation, accuracy tuning — all riskier to compromise than deferring Pro).
+
+**Recommendation:** **Option 2 — cut Pro from MVP.** Rationale:
+
+1. Launch Free tier at W4 as planned; Pro slips to month 3 (≈ 2026-06-15).
+2. Buy back Week 4 of MVP for (a) the production cron smoke test (never run end-to-end against real data), (b) Q-06 alerting (automated observability still deferred), (c) image hot-link metric collection for Q-09 (SP#4.5 mirror gate), (d) dogfooding.
+3. Option 3 (reduced Pro) is a trap — each Pro sub-feature (brand matching, playbook gen, Stripe) has independent complexity and failure modes; shipping any one half-built damages trust more than shipping none.
+4. Free tier alone proves the *valuable insight* of the product (curated templates w/ quality scores + vibecoding-tool compatibility). Pro is monetization layering on top — irrelevant if the Free tier doesn't land clean.
+
+**Re-open when:** User confirms Option 2 (likely combined with SP#5 brainstorming kickoff). If confirmed, this Q resolves and moves to resolved-questions or gets deleted per file convention. SP#6 remains parked at Q-03.
 
 ---
 
@@ -158,3 +169,4 @@
 - **2026-04-14** — Sub-project #2 (ingestion) brainstorming completed. Q-04 resolved (weekly refreshJob implements mutable-data policy). Q-01 kept deferred (no Puppeteer in MVP). Added Q-07 (token pool operational policy) and Q-08 (cron route observability gap).
 - **2026-04-14** — Sub-project #3 (evaluation + classification) shipped. Q-05 resolved. Q-06 partially addressed (metrics schema + SQL snippets + 429 threshold); automated alerting still deferred. Added Issue #4 tracking for Foundation advisory-lock ineffectiveness (session-scoped over HTTP).
 - **2026-04-14** — Sub-project #4 (marketplace UI free) shipped. Added Q-09 (image hot-link reliability metric → SP#4.5 mirror) and Q-10 (UI i18n scope → SP#5 trigger).
+- **2026-04-14** — SP#4 post-merge review tabled Q-02 recommendation (Option 2: cut Pro from MVP) based on updated burn-rate math. Awaiting user sign-off before SP#5 brainstorming opens.

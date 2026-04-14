@@ -17,7 +17,7 @@
     "test:e2e": "playwright test",
     "db:reset": "supabase db reset",
     "db:types": "supabase gen types typescript --local > lib/db/database.types.ts",
-    "seed:dev": "tsx scripts/seed-dev.ts"
+    "seed:dev": "tsx --env-file-if-exists=.env.local scripts/seed-dev.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
