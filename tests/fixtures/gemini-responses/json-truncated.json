@@ -1,0 +1,9 @@
+{
+  "candidates": [
+    {
+      "content": { "parts": [{ "text": "{\"documentation\":{\"value\":4,\"ration" }] },
+      "finishReason": "MAX_TOKENS"
+    }
+  ],
+  "usageMetadata": { "promptTokenCount": 1500, "candidatesTokenCount": 500 }
+}

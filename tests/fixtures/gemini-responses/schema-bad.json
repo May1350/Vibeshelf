@@ -1,0 +1,7 @@
+{
+  "documentation": { "value": 4, "rationale": "ok" },
+  "code_health_readme": { "value": 3, "rationale": "ok" },
+  "category": "saas",
+  "feature_tags_canonical": ["auth"],
+  "feature_tags_novel": []
+}

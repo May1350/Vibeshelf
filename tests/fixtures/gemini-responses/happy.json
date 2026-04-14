@@ -1,0 +1,8 @@
+{
+  "documentation": { "value": 4, "rationale": "README has clear Features and Getting Started sections." },
+  "code_health_readme": { "value": 3, "rationale": "Mentions tests, minimal code examples." },
+  "category": "saas",
+  "feature_tags_canonical": ["auth", "payments", "dark_mode"],
+  "feature_tags_novel": ["whitelabeling"],
+  "evidence_strength": "strong"
+}
