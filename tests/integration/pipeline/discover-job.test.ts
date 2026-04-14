@@ -69,10 +69,23 @@ function jsonResponse(body: unknown, init?: ResponseInit): Response {
   });
 }
 
+// Capture the real fetch before vi.stubGlobal replaces it, so we can
+// delegate non-GitHub traffic (Supabase REST for runJob's pipeline_runs
+// writes, etc.) back to the actual network. Without this passthrough,
+// runJob's observability inserts fail with "unhandled URL".
+const realFetch: typeof fetch = globalThis.fetch;
+
 // Router that maps GitHub API URLs → canned responses. Any unmatched
-// URL blows up so a regression is loud rather than silently returning {}.
-function mockFetch(input: RequestInfo | URL, _init?: RequestInit): Promise<Response> {
+// api.github.com URL blows up so a regression is loud rather than
+// silently returning {}.
+function mockFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+
+  // Passthrough: anything not targeting GitHub API (e.g. Supabase REST,
+  // storage, auth) goes to the real network.
+  if (!url.startsWith("https://api.github.com/")) {
+    return realFetch(input, init);
+  }
 
   if (url.startsWith("https://api.github.com/search/repositories")) {
     return Promise.resolve(

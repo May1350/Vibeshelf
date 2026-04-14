@@ -57,9 +57,19 @@ interface MockCase {
   readmeSha: string | null; // null → 404 on readme endpoint
 }
 
+// Capture the real fetch once so passthrough works even after
+// vi.stubGlobal replaces globalThis.fetch.
+const realFetch: typeof fetch = globalThis.fetch;
+
 function makeMockFetch(c: MockCase) {
-  return function mockFetch(input: RequestInfo | URL): Promise<Response> {
+  return function mockFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+
+    // Passthrough: non-GitHub traffic (Supabase REST for pipeline_runs
+    // writes from runJob, etc.) goes to the real network.
+    if (!url.startsWith("https://api.github.com/")) {
+      return realFetch(input, init);
+    }
 
     // Repo metadata
     if (/\/repos\/[^/]+\/[^/]+$/.test(url)) {
