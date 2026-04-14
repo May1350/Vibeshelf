@@ -115,10 +115,20 @@ module.exports = {
     },
 
     // ─── Foundation rule F3 — pipeline jobs via runJob only ──────────
+    // Cron routes (app/api/cron/*/route.ts) need to import the job
+    // function so they can pass it to runJob() as the callback. That
+    // IS the runJob pattern — the rule's real intent is "app must not
+    // bypass runJob by calling the job directly". The `pathNot`
+    // carve-out expresses this: cron routes are the approved callers.
+    // Any NEW caller (reviews page, admin dashboard, etc.) that tries
+    // to import from lib/pipeline/jobs/ still trips this rule.
     {
       name: "pipeline-jobs-via-runjob-only",
       severity: "error",
-      from: { path: "^app/" },
+      from: {
+        path: "^app/",
+        pathNot: "^app/api/cron/[^/]+/route\\.ts$",
+      },
       to: { path: "^lib/pipeline/jobs/" },
       comment: "F3: app invokes pipeline only via runJob wrapper, not direct job imports",
     },

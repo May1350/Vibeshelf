@@ -12,6 +12,7 @@ const envSchema = z.object({
   GITHUB_CLIENT_SECRET: z.string().min(1),
   GEMINI_API_KEY: z.string().optional(),
   VERCEL_OIDC_TOKEN: z.string().optional(),
+  CRON_SECRET: z.string().min(1),
 });
 
 export const env = envSchema.parse(process.env);
@@ -27,4 +28,5 @@ export const envScope = {
   GITHUB_CLIENT_SECRET: "web",
   GEMINI_API_KEY: "pipeline",
   VERCEL_OIDC_TOKEN: "both",
+  CRON_SECRET: "pipeline",
 } as const satisfies Record<keyof Env, "web" | "pipeline" | "both">;

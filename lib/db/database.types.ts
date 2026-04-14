@@ -557,6 +557,24 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      acquire_github_token: {
+        Args: { p_scope: string };
+        Returns: {
+          id: string;
+          token_encrypted: string;
+          token_key_version: number;
+          remaining: number | null;
+          reset_at: string | null;
+        }[];
+      };
+      acquire_pipeline_lock: {
+        Args: { lock_key: string };
+        Returns: boolean;
+      };
+      release_pipeline_lock: {
+        Args: { lock_key: string };
+        Returns: boolean;
+      };
       create_review_with_fork_check: {
         Args: {
           p_rating: number;
