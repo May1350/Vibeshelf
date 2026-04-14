@@ -58,6 +58,9 @@ export interface RefreshOutput {
   batches_processed: number;
   timed_out: boolean;
   lock_acquired: boolean;
+  // IDs surfaced to the cron route for revalidateTag invalidation.
+  // Pipeline jobs cannot import next/cache (Foundation rule 9).
+  changedRepoIds: readonly string[];
   [key: string]: unknown;
 }
 
@@ -107,6 +110,7 @@ export async function refreshJob(
       batches_processed: 0,
       timed_out: false,
       lock_acquired: false,
+      changedRepoIds: [],
     };
   }
 
@@ -115,6 +119,7 @@ export async function refreshJob(
   let readmesChanged = 0;
   let batchesProcessed = 0;
   let timedOut = false;
+  const changedIds: string[] = [];
   // Composite cursor (updated_at, id) — tied updated_at values between
   // consecutive rows would otherwise strand repos at the batch boundary
   // because a pure `.gt(updated_at, ...)` would skip siblings. Advancing
@@ -137,12 +142,16 @@ export async function refreshJob(
         }
         try {
           const outcome = await refreshOne(ctx, repo);
-          if (outcome === "removed") reposRemoved += 1;
-          else if (outcome === "readme-changed") {
+          if (outcome === "removed") {
+            reposRemoved += 1;
+            changedIds.push(repo.id);
+          } else if (outcome === "readme-changed") {
             readmesChanged += 1;
             reposRefreshed += 1;
+            changedIds.push(repo.id);
           } else {
             reposRefreshed += 1;
+            changedIds.push(repo.id);
           }
         } catch (err) {
           // Propagate pool-wide errors — rest of the batch can't
@@ -182,6 +191,7 @@ export async function refreshJob(
       batches_processed: batchesProcessed,
       timed_out: timedOut,
       lock_acquired: true,
+      changedRepoIds: changedIds,
     };
   } finally {
     await releaseLock(ctx);

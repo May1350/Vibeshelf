@@ -48,6 +48,9 @@ export interface DiscoverOutput {
   repos_skipped: number;
   queries_executed: number;
   lock_acquired: boolean;
+  // IDs surfaced to the cron route for revalidateTag invalidation.
+  // Pipeline jobs cannot import next/cache (Foundation rule 9).
+  changedRepoIds: readonly string[];
   // Index signature to satisfy runJob's `O extends JobOutput` constraint.
   [key: string]: unknown;
 }
@@ -73,6 +76,7 @@ export async function discoverJob(
       repos_skipped: 0,
       queries_executed: 0,
       lock_acquired: false,
+      changedRepoIds: [],
     };
   }
 
@@ -106,6 +110,7 @@ export async function discoverJob(
         repos_skipped: 0,
         queries_executed: queriesExecuted,
         lock_acquired: true,
+        changedRepoIds: [],
       };
     }
 
@@ -119,6 +124,7 @@ export async function discoverJob(
     // ── 6-9. Per-repo: extract → upsert repos → tags → assets.
     let reposDiscovered = 0;
     let reposSkipped = 0;
+    const changedIds: string[] = [];
     for (const repo of newRepos) {
       const key = `${repo.owner}/${repo.name}`;
       const outcome = detailsMap.get(key);
@@ -126,7 +132,8 @@ export async function discoverJob(
         reposSkipped += 1;
         continue;
       }
-      await ingestOne(ctx, repo, outcome);
+      const insertedId = await ingestOne(ctx, repo, outcome);
+      if (insertedId) changedIds.push(insertedId);
       reposDiscovered += 1;
     }
 
@@ -139,6 +146,7 @@ export async function discoverJob(
       repos_skipped: reposSkipped,
       queries_executed: queriesExecuted,
       lock_acquired: true,
+      changedRepoIds: changedIds,
     };
   } finally {
     await releaseLock(ctx);
@@ -153,7 +161,7 @@ async function ingestOne(
   ctx: JobContext,
   repo: SearchResultRepo,
   outcome: Extract<FetchRepoDetailsResult | SkippedRepoDetails, { skipped: false }>,
-): Promise<void> {
+): Promise<string | null> {
   const details: RepoDetails = outcome.details;
 
   const techTags = extractTechStack(details.packageJson);
@@ -231,6 +239,8 @@ async function ingestOne(
       );
     }
   }
+
+  return repoId;
 }
 
 // ──────────────────────────────────────────────────────────────────────

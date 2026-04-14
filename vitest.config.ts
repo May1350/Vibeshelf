@@ -8,6 +8,13 @@ export default defineConfig({
   test: {
     globalSetup: "./vitest.setup.ts",
     environment: "node",
+    // Integration tests share one local Supabase DB. Parallel file execution
+    // causes cross-file pollution: e.g. `token-pool.test.ts`'s cleanup
+    // `delete().like("label", "test-%")` wipes `discover-job.test.ts`'s
+    // tokens mid-run → PoolExhaustedError. Running files sequentially is
+    // cheap for our test count and eliminates the whole isolation class.
+    // Resolves Issue #5 item 1.
+    fileParallelism: false,
     env: {
       NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
       NEXT_PUBLIC_SUPABASE_ANON_KEY:

@@ -1,7 +1,16 @@
 import type { SupabaseClient } from "@/lib/db";
 
 export type JobInput = Record<string, unknown>;
-export type JobOutput = Record<string, unknown>;
+
+/**
+ * Job output. Optional `changedRepoIds` lets cron route handlers
+ * invalidate Next.js cache tags per affected repo. Pipeline jobs
+ * cannot import next/cache (Foundation rule 9), so they surface
+ * IDs and the route handles invalidation.
+ */
+export type JobOutput = Record<string, unknown> & {
+  readonly changedRepoIds?: readonly string[];
+};
 
 export interface JobContext {
   readonly runId: string;

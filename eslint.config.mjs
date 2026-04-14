@@ -30,7 +30,7 @@ export default [
 
   {
     files: ["**/*.{ts,tsx}"],
-    ignores: ["lib/env.ts"],
+    ignores: ["lib/env.ts", "scripts/**"],
     rules: {
       "no-restricted-syntax": ["error", ...processEnvSelectors],
     },

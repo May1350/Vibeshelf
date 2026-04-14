@@ -130,8 +130,31 @@
 
 ---
 
+## Q-09. Image hot-link reliability metric (surfaced in sub-project #4)
+
+**Status:** New. SP#4 ships with `next/image` + `remotePatterns` allowlist for GitHub-hosted README assets (raw.githubusercontent.com, user-images.githubusercontent.com, github.com — `camo` excluded because GitHub mints fresh tokens that we'd cache stale). SP#4.5 will mirror images into Supabase Storage; the decision trigger is hard data on broken-image rate from production.
+
+**Re-open when:** Post-launch metrics show ≥5% broken-image events on marketplace cards (measure via client-side `onError` beacon or server-side periodic HEAD-check on `repo_assets.external_url`). Implementation lives in SP#4.5 (mirror pipeline + width/height extraction + GIF→MP4 conversion).
+
+---
+
+## Q-10. UI internationalization scope
+
+**Status:** New. SP#4 ships English placeholder strings ("Search templates...", "Filters", "Coming soon", category labels via `humanize(slug)`, etc.). PRD primary language is Korean. Decision: when do we localize, and how?
+
+**Options:**
+1. Korean strings inline now (extra ~2 days; blocks SP#4 close — already past that gate).
+2. Korean strings as part of SP#5 (Identity + Fork + Reviews) bundled with auth/review-related copy.
+3. Defer to Pro tier (SP#6) — assumes vibecoders read English UI.
+4. Add `next-intl` and migrate copy incrementally per sub-project.
+
+**Re-open when:** Starting SP#5 brainstorming. The framework choice (#4) needs to be made before any Korean copy lands so we don't pay double-migration cost.
+
+---
+
 ## Revision log
 
 - **2026-04-11** — File created during Foundation brainstorming two-reviewer pass. Seeded with Q-01 through Q-06.
 - **2026-04-14** — Sub-project #2 (ingestion) brainstorming completed. Q-04 resolved (weekly refreshJob implements mutable-data policy). Q-01 kept deferred (no Puppeteer in MVP). Added Q-07 (token pool operational policy) and Q-08 (cron route observability gap).
 - **2026-04-14** — Sub-project #3 (evaluation + classification) shipped. Q-05 resolved. Q-06 partially addressed (metrics schema + SQL snippets + 429 threshold); automated alerting still deferred. Added Issue #4 tracking for Foundation advisory-lock ineffectiveness (session-scoped over HTTP).
+- **2026-04-14** — Sub-project #4 (marketplace UI free) shipped. Added Q-09 (image hot-link reliability metric → SP#4.5 mirror) and Q-10 (UI i18n scope → SP#5 trigger).

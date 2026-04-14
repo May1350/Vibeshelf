@@ -146,6 +146,15 @@ module.exports = {
       comment:
         "F4: pipeline jobs access DB via ctx.db only (runJob owns the single service-role client)",
     },
+
+    // ─── Marketplace read-side / pipeline write-side separation ──────
+    {
+      name: "no-marketplace-imports-pipeline",
+      severity: "error",
+      from: { path: "^lib/marketplace/" },
+      to: { path: "^lib/pipeline/" },
+      comment: "Marketplace read-side and pipeline write-side share zero code",
+    },
   ],
 
   options: {
