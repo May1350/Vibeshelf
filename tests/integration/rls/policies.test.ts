@@ -224,7 +224,7 @@ describe("repo_scores_select_latest_published", () => {
   it("allows authenticated to see latest score of published repo", async () => {
     const repo = await createRepo("published");
 
-    const { data: score } = await svc
+    const { data: score } = await (svc as any)
       .from("repo_scores")
       .insert({
         repo_id: repo.id,
@@ -232,8 +232,6 @@ describe("repo_scores_select_latest_published", () => {
         maintenance_score: 3.5,
         popularity_score: 4.5,
         code_health_score: 4.0,
-        vibecoding_compat_score: 3.0,
-        total_score: 3.8,
         scoring_model: "test-model",
         scoring_prompt_version: "v1",
         is_latest: true,
@@ -256,7 +254,7 @@ describe("repo_scores_select_latest_published", () => {
   it("denies seeing is_latest=false row", async () => {
     const repo = await createRepo("published");
 
-    const { data: score } = await svc
+    const { data: score } = await (svc as any)
       .from("repo_scores")
       .insert({
         repo_id: repo.id,
@@ -264,8 +262,6 @@ describe("repo_scores_select_latest_published", () => {
         maintenance_score: 3.5,
         popularity_score: 4.5,
         code_health_score: 4.0,
-        vibecoding_compat_score: 3.0,
-        total_score: 3.8,
         scoring_model: "test-model",
         scoring_prompt_version: "v1",
         is_latest: false,
@@ -283,7 +279,7 @@ describe("repo_scores_select_latest_published", () => {
   it("denies seeing score of unpublished repo", async () => {
     const repo = await createRepo("pending");
 
-    const { data: score } = await svc
+    const { data: score } = await (svc as any)
       .from("repo_scores")
       .insert({
         repo_id: repo.id,
@@ -291,8 +287,6 @@ describe("repo_scores_select_latest_published", () => {
         maintenance_score: 3.5,
         popularity_score: 4.5,
         code_health_score: 4.0,
-        vibecoding_compat_score: 3.0,
-        total_score: 3.8,
         scoring_model: "test-model",
         scoring_prompt_version: "v1",
         is_latest: true,
