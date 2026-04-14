@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "biome check && eslint . --ignore-pattern '**/__fixtures__/**' && depcruise -c dependency-cruiser.cjs --exclude '__fixtures__' lib/ app/",
-    "lint:neg:depcruise": "! depcruise -c dependency-cruiser.cjs lib/pipeline/__fixtures__/bad-pipeline-import.ts 2>/dev/null",
+    "lint:neg:depcruise": "! depcruise -c dependency-cruiser.cjs lib/pipeline/__fixtures__/bad-pipeline-import.ts 2>/dev/null && ! depcruise -c dependency-cruiser.cjs lib/pipeline/jobs/__fixtures__/bad-score-service-import.ts 2>/dev/null",
     "lint:neg:eslint": "! eslint lib/__fixtures__/bad-process-env.ts 2>/dev/null",
     "lint:neg": "pnpm lint:neg:depcruise && pnpm lint:neg:eslint",
     "typecheck": "tsc --noEmit",
