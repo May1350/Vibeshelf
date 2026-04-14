@@ -88,10 +88,14 @@ async function seedTokens(): Promise<SeededIds> {
   return { fresh, high, low };
 }
 
+// Labels this test file owns. Scoping the cleanup to exact labels
+// prevents us from eating peer tests' tokens (e.g. `test-discover-*`
+// from discover-job.test.ts, `test-refresh-token` from refresh-job.test.ts).
+// The previous `LIKE 'test-%'` was a plausible cause of Issue #5 layer 2.
+const OWNED_LABELS = ["test-fresh", "test-high", "test-low"];
+
 async function cleanupTokens(): Promise<void> {
-  // `like` avoids nuking any real tokens that a future operator might
-  // seed into this local DB. All seeded rows here are labelled `test-*`.
-  await svc.from("github_tokens").delete().like("label", "test-%");
+  await svc.from("github_tokens").delete().in("label", OWNED_LABELS);
 }
 
 describe("token-pool (integration)", () => {

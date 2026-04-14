@@ -167,24 +167,37 @@ function mockFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respon
 
 async function seedToken(): Promise<void> {
   const toHex = (buf: Buffer): string => `\\x${buf.toString("hex")}`;
-  await svc.from("github_tokens").insert([
-    {
-      label: `${TEST_LABEL_PREFIX}-rest`,
-      scope: "rest",
-      token_encrypted: toHex(encryptToken("ghp_fixture_rest", 1)),
-      token_key_version: 1,
-      remaining: 5000,
-      reset_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    },
-    {
-      label: `${TEST_LABEL_PREFIX}-search`,
-      scope: "search",
-      token_encrypted: toHex(encryptToken("ghp_fixture_search", 1)),
-      token_key_version: 1,
-      remaining: 30,
-      reset_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    },
-  ]);
+  // Per Reviewer D diagnosis of Issue #5 layer 2: the previous version
+  // swallowed the insert result, so a silent validation failure (bytea
+  // shape, RLS, unique-constraint collision with leaked rows) would
+  // produce no error but also no seeded row — later `acquire_github_token`
+  // returns null → PoolExhaustedError. Select back + throw so the seed
+  // failure is surfaced loudly.
+  const { data, error } = await svc
+    .from("github_tokens")
+    .insert([
+      {
+        label: `${TEST_LABEL_PREFIX}-rest`,
+        scope: "rest",
+        token_encrypted: toHex(encryptToken("ghp_fixture_rest", 1)),
+        token_key_version: 1,
+        remaining: 5000,
+        reset_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      },
+      {
+        label: `${TEST_LABEL_PREFIX}-search`,
+        scope: "search",
+        token_encrypted: toHex(encryptToken("ghp_fixture_search", 1)),
+        token_key_version: 1,
+        remaining: 30,
+        reset_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      },
+    ])
+    .select("id, label");
+  if (error) throw new Error(`seedToken failed: ${error.message}`);
+  if (!data || data.length !== 2) {
+    throw new Error(`seedToken: expected 2 rows inserted, got ${data?.length ?? 0}`);
+  }
 }
 
 async function cleanup(): Promise<void> {
