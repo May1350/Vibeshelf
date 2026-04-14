@@ -183,12 +183,20 @@ jobs:
       - run: supabase start
       - name: Populate .env.local
         env:
-          TOKEN_KEY: ${{ secrets.TEST_TOKEN_ENCRYPTION_KEY_V1 }}
+          SECRET_TOKEN_KEY: ${{ secrets.TEST_TOKEN_ENCRYPTION_KEY_V1 }}
         run: |
           set -euo pipefail
           SRK=$(supabase status -o json | jq -r '.SERVICE_ROLE_KEY')
           ANON=$(supabase status -o json | jq -r '.ANON_KEY')
           URL=$(supabase status -o json | jq -r '.API_URL')
+          # Use the repo secret if set; else mint a throwaway base64(32) key
+          # per CI run. E2E does not exercise real token encryption — the app
+          # only needs the env value to pass lib/env.ts zod validation.
+          if [ -n "${SECRET_TOKEN_KEY:-}" ]; then
+            TOKEN_KEY="$SECRET_TOKEN_KEY"
+          else
+            TOKEN_KEY=$(openssl rand -base64 32)
+          fi
           printf '%s\n' \
             "NEXT_PUBLIC_SUPABASE_URL=$URL" \
             "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON" \

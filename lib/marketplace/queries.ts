@@ -9,6 +9,7 @@
 
 import "server-only";
 
+import { cacheLife, cacheTag } from "next/cache";
 import { createAnonClient } from "@/lib/db";
 import type { MarketplaceQuery } from "./search-params";
 
@@ -50,6 +51,13 @@ export interface ListReposResult {
 }
 
 export async function listRepos(query: MarketplaceQuery): Promise<ListReposResult> {
+  // Cache Components: each distinct query object gets its own cache entry.
+  // Cron jobs `revalidateTag('repos:list', 'max')` on any changed repo data,
+  // busting every cached list variant at once.
+  "use cache";
+  cacheTag("repos:list");
+  cacheLife("hours");
+
   const db = createAnonClient();
   const offset = (query.page - 1) * 36;
   // Empty array → null (RPC treats either as "no category filter").
@@ -111,10 +119,20 @@ export interface RepoDetail extends MarketplaceRepoRow {
 }
 
 export async function getRepo(owner: string, name: string): Promise<RepoDetail | null> {
+  // Cache Components: key on (owner, name) + tag by repo id once we know it.
+  // Cron jobs `revalidateTag(\`repo:\${id}\`, 'max')` when a repo's data changes.
+  "use cache";
+  cacheLife("hours");
+
   const db = createAnonClient();
   // biome-ignore lint/suspicious/noExplicitAny: RPC types regen pending
   const dbAny = db as any;
   const { data, error } = await dbAny.rpc("get_repo_detail", { p_owner: owner, p_name: name });
   if (error) throw new Error(`getRepo failed: ${error.message}`);
-  return (data as RepoDetail | null) ?? null;
+  const repo = (data as RepoDetail | null) ?? null;
+  // Tag with the resolved id so individual invalidations can hit this entry.
+  // Calling cacheTag with a fallback string for missing repos still attaches a
+  // tag so a future repo with that (owner, name) can bust the negative cache.
+  cacheTag(repo ? `repo:${repo.id}` : `repo:missing:${owner}/${name}`);
+  return repo;
 }
