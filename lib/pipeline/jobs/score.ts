@@ -24,6 +24,9 @@ export interface ScoreJobOutput extends JobOutput {
   repos_scored: number;
   repos_stuck_reset: number;
   budget_exhausted: boolean;
+  // IDs surfaced to the cron route for revalidateTag invalidation.
+  // Pipeline jobs cannot import next/cache (Foundation rule 9).
+  changedRepoIds: readonly string[];
 }
 
 export async function scoreJob(
@@ -84,11 +87,13 @@ export async function scoreJob(
       repos_scored: 0,
       repos_stuck_reset: stuckReset,
       budget_exhausted: false,
+      changedRepoIds: [],
     };
   }
 
   const gemini = new GeminiClient();
   const latencies: number[] = [];
+  const changedIds: string[] = [];
 
   // 4. Per-repo via ctx.spawn (child runs for observability).
   for (let i = 0; i < claimed.length; i++) {
@@ -113,10 +118,16 @@ export async function scoreJob(
       );
 
       metrics.repos_scored += 1;
-      if (outcome.status === "published") metrics.repos_published += 1;
-      else if (outcome.status === "scored") metrics.repos_gated += 1;
-      else if (outcome.status === "needs_review") metrics.repos_needs_review += 1;
-      else if (outcome.status === "skipped" && outcome.reason === "schema_error") {
+      if (outcome.status === "published") {
+        metrics.repos_published += 1;
+        changedIds.push(repo.id);
+      } else if (outcome.status === "scored") {
+        metrics.repos_gated += 1;
+        changedIds.push(repo.id);
+      } else if (outcome.status === "needs_review") {
+        metrics.repos_needs_review += 1;
+        changedIds.push(repo.id);
+      } else if (outcome.status === "skipped" && outcome.reason === "schema_error") {
         metrics.repos_skipped_schema += 1;
         await ctx.db.from("repos").update({ status: "pending" }).eq("id", repo.id);
       } else if (outcome.status === "skipped" && outcome.reason === "server_error") {
@@ -160,5 +171,6 @@ export async function scoreJob(
     repos_scored: metrics.repos_scored,
     repos_stuck_reset: stuckReset,
     budget_exhausted: metrics.budget_exhausted,
+    changedRepoIds: changedIds,
   };
 }

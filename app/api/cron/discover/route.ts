@@ -1,3 +1,4 @@
+import { revalidateTag } from "next/cache";
 import { env } from "@/lib/env";
 import { discoverJob } from "@/lib/pipeline/jobs/discover";
 import { runJob } from "@/lib/pipeline/runJob";
@@ -29,5 +30,17 @@ export async function GET(req: Request): Promise<Response> {
   // DO NOT add sensitive data (tokens, raw errors, repo lists) to the
   // output type — cron runs show up in Vercel's function logs.
   const result = await runJob("ingest-discover", {}, (ctx) => discoverJob(ctx));
+
+  // Invalidate cache tags for changed repos. revalidateTag(tag, profile)
+  // form — single-arg overload deprecated in Next 16 (Critical R1.C1).
+  // Pipeline jobs cannot import next/cache (Foundation rule 9), so they
+  // surface IDs and the route handles invalidation.
+  const ids = result.changedRepoIds ?? [];
+  if (ids.length > 0) {
+    revalidateTag("repos:facets", "max");
+    revalidateTag("repos:list", "max");
+    for (const id of ids) revalidateTag(`repo:${id}`, "max");
+  }
+
   return Response.json(result);
 }

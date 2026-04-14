@@ -18,6 +18,9 @@ export interface RescoreJobOutput extends JobOutput {
   candidates_found: number;
   repos_scored: number;
   drain_mode: boolean;
+  // IDs propagated from the delegated scoreJob run for cron-route
+  // revalidateTag invalidation. Pipeline jobs cannot import next/cache.
+  changedRepoIds: readonly string[];
 }
 
 export async function rescoreJob(
@@ -49,7 +52,12 @@ export async function rescoreJob(
   const targetIds = [...versionMismatches, ...stales].slice(0, batchSize);
 
   if (targetIds.length === 0) {
-    return { candidates_found: 0, repos_scored: 0, drain_mode: drainMode };
+    return {
+      candidates_found: 0,
+      repos_scored: 0,
+      drain_mode: drainMode,
+      changedRepoIds: [],
+    };
   }
 
   // 2. Delegate to scoreJob — it routes through claim_repos_by_id for
@@ -60,5 +68,6 @@ export async function rescoreJob(
     candidates_found: targetIds.length,
     repos_scored: result.repos_scored,
     drain_mode: drainMode,
+    changedRepoIds: result.changedRepoIds ?? [],
   };
 }
