@@ -270,9 +270,15 @@ ALTER TABLE public.repo_tags ADD CONSTRAINT repo_tags_source_check
 ```sql
 -- Child runs (those with parent_run_id set) MUST carry repo_id in input
 -- for per-repo traceability (see spec §6.2 — operator queries).
+--
+-- NOT VALID avoids checking existing rows: Foundation's run-job.test.ts
+-- echo job spawned child runs without repo_id in input. Those rows are
+-- historical and shouldn't break the migration. New inserts/updates still
+-- enforce the constraint.
 ALTER TABLE public.pipeline_runs
   ADD CONSTRAINT pipeline_runs_child_has_repo_id
-    CHECK (parent_run_id IS NULL OR input ? 'repo_id');
+    CHECK (parent_run_id IS NULL OR input ? 'repo_id')
+    NOT VALID;
 ```
 
 - [ ] **Step 1.7:** Verify all 6 migration files apply cleanly locally:
@@ -387,6 +393,59 @@ REVOKE ALL ON FUNCTION public.reset_stuck_scoring_repos() FROM public;
 GRANT EXECUTE ON FUNCTION public.reset_stuck_scoring_repos() TO service_role;
 
 -- ══════════════════════════════════════════════════════════════════════
+-- claim_repos_by_id
+--   Transition a specific list of repo IDs to 'scoring' and return their
+--   row data. Used by rescoreJob which pre-selects candidates by
+--   scoring_prompt_version mismatch (not by status='pending').
+--   Skips any repo that's not in a claimable state (already 'scoring',
+--   'removed', etc.) so concurrent jobs don't double-claim.
+-- ══════════════════════════════════════════════════════════════════════
+CREATE OR REPLACE FUNCTION public.claim_repos_by_id(p_ids uuid[])
+RETURNS TABLE (
+  id                  uuid,
+  github_id           bigint,
+  owner               text,
+  name                text,
+  description         text,
+  homepage            text,
+  license             text,
+  default_branch     text,
+  stars               int,
+  forks               int,
+  watchers            int,
+  last_commit_at      timestamptz,
+  github_created_at   timestamptz,
+  github_pushed_at    timestamptz,
+  readme_sha          text,
+  capabilities        jsonb,
+  assets_extracted_at timestamptz
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  RETURN QUERY
+  WITH claimed AS (
+    UPDATE public.repos r
+    SET status = 'scoring'
+    WHERE r.id = ANY(p_ids)
+      AND r.status IN ('published', 'scored', 'needs_review', 'dormant')
+    RETURNING r.id
+  )
+  SELECT r.id, r.github_id, r.owner, r.name, r.description, r.homepage,
+         r.license, r.default_branch, r.stars, r.forks, r.watchers,
+         r.last_commit_at, r.github_created_at, r.github_pushed_at,
+         r.readme_sha, r.capabilities, r.assets_extracted_at
+  FROM public.repos r
+  JOIN claimed c ON c.id = r.id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.claim_repos_by_id(uuid[]) FROM public;
+GRANT EXECUTE ON FUNCTION public.claim_repos_by_id(uuid[]) TO service_role;
+
+-- ══════════════════════════════════════════════════════════════════════
 -- apply_score_result
 --   Atomically: flip prior is_latest, insert new repo_scores, upsert
 --   repo_tags, update repos (category, tags_freeform, status-per-gate).
@@ -432,17 +491,28 @@ BEGIN
     p_popularity_score     * 0.15 +
     p_visual_preview_score * 0.20;
 
-  -- Step 2: read current repo state (status + assets_extracted_at for gate)
+  -- Step 2: read current repo state (status + assets_extracted_at for gate).
+  -- FOR UPDATE on repos serializes concurrent apply_score_result calls for
+  -- the same repo — paired with the is_latest row lock below, this prevents
+  -- two RPCs from both seeing is_latest=true and flipping → inserting → violating
+  -- the partial unique index idx_repo_scores_one_latest_per_repo.
   SELECT status, assets_extracted_at INTO v_current_status, v_assets_extracted
   FROM public.repos WHERE id = p_repo_id FOR UPDATE;
 
-  -- Step 3: flip prior is_latest=false BEFORE inserting new row
+  -- Step 3: lock the current is_latest row (if any) BEFORE flipping it.
+  -- This prevents a concurrent RPC from seeing the same is_latest=true row
+  -- after our UPDATE takes effect — they must wait on our transaction.
+  PERFORM 1 FROM public.repo_scores
+    WHERE repo_id = p_repo_id AND is_latest = true
+    FOR UPDATE;
+
+  -- Step 4: flip prior is_latest=false BEFORE inserting new row
   -- (avoids partial unique index violation on idx_repo_scores_one_latest_per_repo)
   UPDATE public.repo_scores
   SET is_latest = false
   WHERE repo_id = p_repo_id AND is_latest = true;
 
-  -- Step 4: insert new repo_scores row
+  -- Step 5: insert new repo_scores row
   INSERT INTO public.repo_scores (
     repo_id, documentation_score, maintenance_score, popularity_score,
     code_health_score, vibecoding_compat_score, visual_preview_score,
@@ -455,7 +525,9 @@ BEGIN
     p_evidence_strength, p_run_id, true
   );
 
-  -- Step 5: upsert canonical repo_tags
+  -- Step 6: upsert canonical repo_tags (tag rows themselves are inserted by
+  -- lib/pipeline/tags/resolve.ts:resolveTagIds BEFORE this RPC; we only link
+  -- them here to preserve the "single atomic write" contract).
   IF array_length(p_canonical_tag_ids, 1) IS NOT NULL THEN
     FOR v_idx IN 1..array_length(p_canonical_tag_ids, 1) LOOP
       INSERT INTO public.repo_tags (repo_id, tag_id, confidence, source)
@@ -465,7 +537,7 @@ BEGIN
     END LOOP;
   END IF;
 
-  -- Step 6: determine next status (publish gate + grandfather)
+  -- Step 7: determine next status (publish gate + grandfather)
   IF p_is_rescore AND v_current_status = 'published' AND v_new_total < 2.5 THEN
     v_next_status := 'published';  -- grandfather
     UPDATE public.repos
@@ -479,7 +551,7 @@ BEGIN
     v_next_status := 'published';
   END IF;
 
-  -- Step 7: update repos with new status + category + tags_freeform
+  -- Step 8: update repos with new status + category + tags_freeform
   UPDATE public.repos
   SET status        = v_next_status,
       category      = p_category,
@@ -516,13 +588,13 @@ git commit -m "feat(db): scoring RPCs (claim_pending, reset_stuck, apply_score_r
 - Modify: `lib/env.ts`
 - Modify: `.env.example`
 
-- [ ] **Step 3.1:** Install Gemini SDK:
+- [ ] **Step 3.1:** Install Gemini SDK with a pinned version:
 
 ```bash
-pnpm add @google/genai
+pnpm add @google/genai@^0.3.0
 ```
 
-Expected: `@google/genai` in `dependencies`.
+Expected: `@google/genai` in `dependencies`. Pinning the major version prevents surprise breaks when the SDK evolves; the executor should verify the installed version's `generateContent` signature matches `lib/pipeline/gemini/client.ts` (Task 6.1). If the SDK signature has drifted, adapt the client code and bump the version pin accordingly.
 
 - [ ] **Step 3.2:** Add `RESCORE_DRAIN_MODE` to `lib/env.ts` schema:
 
@@ -896,12 +968,22 @@ export function computeDeterministicScores(input: DeterministicInput): Determini
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// popularity: log(stars+1) / log(months+2), capped at 5
+// popularity: log(stars+1) / log(months+2) × 2.5, capped at [0, 5]
+//
+// Examples (cap at 5):
+//   1000 stars / 12 months → log(1001)/log(14) × 2.5 ≈ 6.54 → 5.00
+//     100 stars / 12 months → log(101)/log(14) × 2.5 ≈ 4.37
+//     100 stars / 3 months  → log(101)/log(5) × 2.5 ≈ 7.17 → 5.00
+//      10 stars / 12 months → log(11)/log(14) × 2.5 ≈ 2.27
+//       0 stars / any       → log(1)/log(...) = 0 → 0.00
+//
+// The × 2.5 multiplier is calibrated against the ~100 stars / 1 year
+// baseline producing a 4.0-ish score (median vibe-coder template). If we
+// tune, adjust here and update this comment's worked examples.
 // ──────────────────────────────────────────────────────────────────────
 function computePopularity(input: DeterministicInput): number {
   const ageMs = Date.now() - input.githubCreatedAt.getTime();
   const months = Math.max(0, ageMs / (1000 * 60 * 60 * 24 * 30));
-  // log(stars+1) / log(months+2) × 5, then cap at 5
   // months+2 ensures denominator > 1 even for brand-new repos
   const raw = (Math.log(input.stars + 1) / Math.log(months + 2)) * 2.5;
   return clamp(raw, 0, 5);
@@ -1802,14 +1884,10 @@ Note: the Gemini SDK API signature may evolve. Verify against the SDK version in
 - [ ] **Step 6.2.1:** Create `lib/pipeline/tags/resolve.ts`:
 
 ```typescript
-// Extracted from lib/pipeline/jobs/discover.ts — shared tag resolution logic.
-// Caller provides slugs + kind + source; helper handles:
-//   1. batch-select existing tags by slug
-//   2. batch-insert missing with proper kind
-//   3. upsert repo_tags junction rows
-//
-// Used by both discoverJob (tech_stack + vibecoding_tool tags) and
-// scoreRepo (feature tags).
+// Two-layer tag resolution, designed to support both the eager-link pattern
+// (discover.ts: tag rows + junction in one helper) AND the atomic-link pattern
+// (score-repo.ts: resolve IDs → pass to apply_score_result RPC which does the
+// junction insert inside a single DB transaction).
 
 import type { SupabaseClient } from "@/lib/db";
 
@@ -1821,12 +1899,27 @@ export interface TagInput {
   source: "auto" | "auto_llm" | "manual";
 }
 
-export async function upsertAndLinkTags(
+export interface ResolvedTag {
+  slug: string;
+  id: string;
+  confidence: number;
+  source: TagInput["source"];
+}
+
+/**
+ * Upsert tag rows (not repo_tags junction). Returns resolved IDs in the
+ * same order as input. Callers that want atomicity on the junction pass
+ * these IDs to apply_score_result RPC. Callers that are OK with non-atomic
+ * writes (e.g., discoverJob) use upsertAndLinkTags below.
+ *
+ * Orphaned tag rows (if the caller fails before junction insert) are
+ * harmless — they're just unused rows in the lookup table.
+ */
+export async function resolveTagIds(
   db: SupabaseClient,
-  repoId: string,
   tags: readonly TagInput[],
-): Promise<{ linked: number }> {
-  if (tags.length === 0) return { linked: 0 };
+): Promise<ResolvedTag[]> {
+  if (tags.length === 0) return [];
 
   // Dedupe by (slug, kind)
   const seen = new Set<string>();
@@ -1869,26 +1962,40 @@ export async function upsertAndLinkTags(
     }
   }
 
-  // Upsert junction rows
-  const junctionRows = unique
-    .map((t) => {
-      const tag = byKey.get(`${t.kind}:${t.slug.toLowerCase()}`);
-      if (!tag) return null;
-      return {
-        repo_id: repoId,
-        tag_id: tag.id,
-        confidence: t.confidence,
-        source: t.source,
-      };
-    })
-    .filter((r): r is NonNullable<typeof r> => r !== null);
+  const resolved: ResolvedTag[] = [];
+  for (const t of unique) {
+    const row = byKey.get(`${t.kind}:${t.slug.toLowerCase()}`);
+    if (!row) continue;
+    resolved.push({ slug: t.slug, id: row.id, confidence: t.confidence, source: t.source });
+  }
+  return resolved;
+}
 
-  if (junctionRows.length === 0) return { linked: 0 };
+/**
+ * Convenience wrapper: upserts tag rows AND inserts repo_tags junction.
+ * Used by discoverJob (eager-link pattern — no separate atomicity boundary).
+ * scoreRepo should NOT use this; it passes resolveTagIds output to
+ * apply_score_result RPC instead.
+ */
+export async function upsertAndLinkTags(
+  db: SupabaseClient,
+  repoId: string,
+  tags: readonly TagInput[],
+): Promise<{ linked: number }> {
+  const resolved = await resolveTagIds(db, tags);
+  if (resolved.length === 0) return { linked: 0 };
 
-  const { error: juncErr } = await db
+  const junctionRows = resolved.map((r) => ({
+    repo_id: repoId,
+    tag_id: r.id,
+    confidence: r.confidence,
+    source: r.source,
+  }));
+
+  const { error } = await db
     .from("repo_tags")
     .upsert(junctionRows, { onConflict: "repo_id,tag_id", ignoreDuplicates: true });
-  if (juncErr) throw new Error(`repo_tags upsert failed: ${juncErr.message}`);
+  if (error) throw new Error(`repo_tags upsert failed: ${error.message}`);
 
   return { linked: junctionRows.length };
 }
@@ -1901,22 +2008,33 @@ function humanize(slug: string): string {
 }
 ```
 
-- [ ] **Step 6.2.2:** Refactor `lib/pipeline/jobs/discover.ts` to use `upsertAndLinkTags`:
+- [ ] **Step 6.2.2:** Refactor `lib/pipeline/jobs/discover.ts` to use `upsertAndLinkTags`.
 
-In `lib/pipeline/jobs/discover.ts`, replace the inline `insertRepoTags` function (currently ~70 lines) with a call to the shared helper:
+Open `lib/pipeline/jobs/discover.ts`. Make the following precise changes:
+
+**(a)** Add import at the top (in alphabetical order within the `@/lib/pipeline/` block):
 
 ```typescript
 import { upsertAndLinkTags, type TagInput } from "@/lib/pipeline/tags/resolve";
+```
 
-// Inside ingestOne or equivalent caller:
-const tagInputs: TagInput[] = [
-  ...techTags.map((t) => ({ ...t, source: "auto" as const })),
-  ...vibecodingTags.map((t) => ({ ...t, source: "auto" as const })),
-];
+**(b)** Delete the entire `insertRepoTags` function (approximately lines 236–314 — the block starting `interface TagRow {` through the end of `async function insertRepoTags`). Also delete:
+- `TagRow` interface (if only used by `insertRepoTags`)
+- `humanizeSlug` helper function (now lives in `tags/resolve.ts`)
+
+**(c)** Find the caller site (`await insertRepoTags(ctx, repoId, allTags)` inside `ingestOne`, near line 220-225). Replace with:
+
+```typescript
+const tagInputs: TagInput[] = allTags.map((t) => ({
+  ...t,
+  source: "auto" as const,
+}));
 await upsertAndLinkTags(ctx.db, repoId, tagInputs);
 ```
 
-Delete the old `insertRepoTags` function body.
+**(d)** Remove the now-unused import `ExtractedTag` if it's still imported but no longer referenced in the file.
+
+**(e)** Run `pnpm lint && pnpm typecheck` to verify no unused imports or orphaned symbols remain.
 
 - [ ] **Step 6.3:** Run existing tests to verify refactor didn't break discover:
 
@@ -1964,7 +2082,7 @@ import { extractReadmeSections } from "@/lib/pipeline/extractors/readme-sections
 import { computeDeterministicScores } from "./deterministic";
 import { normalizeTags } from "./tag-normalizer";
 import type { RequestBudget } from "./request-budget";
-import { upsertAndLinkTags } from "@/lib/pipeline/tags/resolve";
+import { resolveTagIds } from "@/lib/pipeline/tags/resolve";
 
 export interface ClaimedRepo {
   id: string;
@@ -2087,21 +2205,21 @@ export async function scoreRepo(
     llmResult.novelTags,
   );
 
-  // Resolve canonical slugs → tag row IDs (side-effect: inserts missing)
-  const tagInputs = canonical.map((slug) => ({
-    slug,
-    kind: "feature" as const,
-    confidence: 0.8,  // LLM confidence proxy
-    source: "auto_llm" as const,
-  }));
-  await upsertAndLinkTags(ctx.db, repo.id, tagInputs);
-
-  const { data: canonicalRows } = await ctx.db
-    .from("tags")
-    .select("id, slug")
-    .in("slug", canonical);
-  const canonicalTagIds = (canonicalRows ?? []).map((r) => r.id);
-  const canonicalConfidences = (canonicalRows ?? []).map(() => 0.8);
+  // Resolve canonical slugs → tag row IDs. This upserts missing tag rows
+  // BUT does NOT insert repo_tags junction — apply_score_result RPC does
+  // that atomically with the score write. Orphaned tag rows if the RPC
+  // fails are harmless (just unused lookup rows).
+  const resolvedTags = await resolveTagIds(
+    ctx.db,
+    canonical.map((slug) => ({
+      slug,
+      kind: "feature" as const,
+      confidence: 0.8,
+      source: "auto_llm" as const,
+    })),
+  );
+  const canonicalTagIds = resolvedTags.map((r) => r.id);
+  const canonicalConfidences = resolvedTags.map((r) => r.confidence);
 
   // 5. apply_score_result RPC
   const { data: statusResult, error: rpcErr } = await ctx.db.rpc("apply_score_result", {
@@ -2302,6 +2420,13 @@ import type { JobContext, JobOutput } from "@/lib/types/jobs";
 export interface ScoreJobInput {
   readonly batchSize?: number;
   readonly mode?: "score" | "rescore";
+  /**
+   * When set, scoreJob operates on these specific repo IDs via
+   * claim_repos_by_id instead of claim_pending_repos (which only picks
+   * status='pending' rows). Used by rescoreJob to process
+   * version-mismatched or stale repos regardless of their current status.
+   */
+  readonly repoIds?: readonly string[];
 }
 
 export interface ScoreJobOutput extends JobOutput {
@@ -2327,13 +2452,24 @@ export async function scoreJob(
     maxCostUsd: 5.0,
   });
 
-  // 3. Claim
-  const { data: claimedRaw, error: claimErr } = await ctx.db.rpc(
-    "claim_pending_repos",
-    { p_limit: batchSize },
-  );
-  if (claimErr) throw new Error(`claim_pending_repos failed: ${claimErr.message}`);
-  const claimed = (claimedRaw ?? []) as ClaimedRepo[];
+  // 3. Claim — branch on whether caller supplied explicit repo IDs (rescore path)
+  //    or we're picking up new 'pending' work (score path).
+  let claimed: ClaimedRepo[];
+  if (input.repoIds && input.repoIds.length > 0) {
+    const { data: claimedRaw, error: claimErr } = await ctx.db.rpc(
+      "claim_repos_by_id",
+      { p_ids: input.repoIds },
+    );
+    if (claimErr) throw new Error(`claim_repos_by_id failed: ${claimErr.message}`);
+    claimed = (claimedRaw ?? []) as ClaimedRepo[];
+  } else {
+    const { data: claimedRaw, error: claimErr } = await ctx.db.rpc(
+      "claim_pending_repos",
+      { p_limit: batchSize },
+    );
+    if (claimErr) throw new Error(`claim_pending_repos failed: ${claimErr.message}`);
+    claimed = (claimedRaw ?? []) as ClaimedRepo[];
+  }
 
   const metrics: ScoreJobMetrics = {
     repos_claimed: claimed.length,
@@ -2367,12 +2503,16 @@ export async function scoreJob(
   const latencies: number[] = [];
 
   // 4. Per-repo via ctx.spawn (child runs for observability)
-  for (const repo of claimed) {
+  for (let i = 0; i < claimed.length; i++) {
+    const repo = claimed[i]!;
     if (!budget.canProceed()) {
       metrics.budget_exhausted = true;
-      // Remaining claimed repos revert to pending so next cron picks them up
-      await ctx.db.from("repos").update({ status: "pending" }).eq("id", repo.id);
-      continue;
+      // Bulk revert all remaining claimed repos (including current) to 'pending'
+      // so next cron picks them up. Break immediately — no point checking the
+      // budget again for each remaining iteration.
+      const remainingIds = claimed.slice(i).map((r) => r.id);
+      await ctx.db.from("repos").update({ status: "pending" }).in("id", remainingIds);
+      break;
     }
 
     const t0 = Date.now();
@@ -2448,6 +2588,7 @@ export async function scoreJob(
 // not from status='pending'. We transition qualifying repos to status='scoring'
 // manually (no claim RPC) so the rest of the flow matches.
 
+import { env } from "@/lib/env";
 import { SCORING_PROMPT_VERSION } from "@/lib/pipeline/gemini/scoring-prompt";
 import type { JobContext, JobOutput } from "@/lib/types/jobs";
 import { scoreJob } from "./score";
@@ -2466,10 +2607,13 @@ export async function rescoreJob(
   ctx: JobContext,
   input: RescoreJobInput = {},
 ): Promise<RescoreJobOutput> {
-  const batchSize = input.batchSize ?? 200;
-  const drainMode = false;  // reserved for env-gated mode in cron route
+  // RESCORE_DRAIN_MODE=true switches rescore cadence from monthly to daily
+  // during major prompt-version migration. The env flag is read here so the
+  // cron route can be dumb. Batch size scales up in drain mode.
+  const drainMode = env.RESCORE_DRAIN_MODE === "true";
+  const batchSize = input.batchSize ?? (drainMode ? 500 : 200);
 
-  // Find candidates
+  // 1. Find candidates (version mismatch OR age > 30 days)
   const { data: candidates, error: candErr } = await ctx.db
     .from("repo_scores")
     .select("repo_id, scoring_prompt_version, scored_at")
@@ -2478,26 +2622,28 @@ export async function rescoreJob(
 
   const now = Date.now();
   const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-  const targetIds: string[] = [];
+  // Version mismatches get priority over staleness
+  const versionMismatches: string[] = [];
+  const stales: string[] = [];
   for (const row of candidates ?? []) {
-    const versionMismatch = row.scoring_prompt_version !== SCORING_PROMPT_VERSION;
-    const stale = row.scored_at ? Date.parse(row.scored_at) < thirtyDaysAgo : true;
-    if (versionMismatch || stale) {
-      targetIds.push(row.repo_id);
-      if (targetIds.length >= batchSize) break;
+    if (row.scoring_prompt_version !== SCORING_PROMPT_VERSION) {
+      versionMismatches.push(row.repo_id);
+    } else if (row.scored_at && Date.parse(row.scored_at) < thirtyDaysAgo) {
+      stales.push(row.repo_id);
     }
   }
+  const targetIds = [...versionMismatches, ...stales].slice(0, batchSize);
 
   if (targetIds.length === 0) {
     return { candidates_found: 0, repos_scored: 0, drain_mode: drainMode };
   }
 
-  // Transition to 'scoring' so score.ts's claim RPC doesn't re-claim them
-  // and refresh.ts doesn't touch them mid-scoring
-  await ctx.db.from("repos").update({ status: "scoring" }).in("id", targetIds);
-
-  // Delegate per-repo work to scoreJob logic (mode='rescore')
-  const result = await scoreJob(ctx, { batchSize: targetIds.length, mode: "rescore" });
+  // 2. Delegate to scoreJob with explicit IDs. scoreJob routes through
+  //    claim_repos_by_id RPC which transitions them to 'scoring' atomically.
+  const result = await scoreJob(ctx, {
+    mode: "rescore",
+    repoIds: targetIds,
+  });
 
   return {
     candidates_found: targetIds.length,
@@ -2734,7 +2880,103 @@ Due to length, the full test files are sketched here. The executing engineer sho
 }
 ```
 
-- [ ] **Step 10.1.2:** Create the other three fixtures similarly (see spec §7.3). `schema-bad.json` omits `evidence_strength`; `schema-semantic-garbage.json` has all-1 scores + empty tags + `weak` evidence; `content-filter.json` is an empty object (simulates Gemini filter response).
+- [ ] **Step 10.1.2:** Create the remaining 6 fixtures:
+
+`tests/fixtures/gemini-responses/schema-bad.json` — missing `evidence_strength` (forces SchemaValidationError):
+```json
+{
+  "documentation": { "value": 4, "rationale": "ok" },
+  "code_health_readme": { "value": 3, "rationale": "ok" },
+  "category": "saas",
+  "feature_tags_canonical": ["auth"],
+  "feature_tags_novel": []
+}
+```
+
+`tests/fixtures/gemini-responses/schema-semantic-garbage.json` — schema-valid but low-quality (forces needs_review via evidence=weak):
+```json
+{
+  "documentation": { "value": 1, "rationale": "empty readme" },
+  "code_health_readme": { "value": 1, "rationale": "no signal" },
+  "category": "other",
+  "feature_tags_canonical": [],
+  "feature_tags_novel": [],
+  "evidence_strength": "weak"
+}
+```
+
+`tests/fixtures/gemini-responses/content-filter.json` — Gemini safety-block response body (mock) used to trigger GeminiContentFilterError path in client.ts. The mock fetch returns this as an HTTP 200 with `finishReason: "SAFETY"` in the Gemini response envelope; the fixture is actually the envelope, not just the text. Example envelope:
+```json
+{
+  "candidates": [{
+    "finishReason": "SAFETY",
+    "safetyRatings": [{ "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "probability": "HIGH" }]
+  }],
+  "usageMetadata": { "promptTokenCount": 1000, "candidatesTokenCount": 0 }
+}
+```
+
+`tests/fixtures/gemini-responses/rate-limit.json` — mock fetch uses this to synthesize a 429 response with body:
+```json
+{ "error": { "code": 429, "message": "Resource has been exhausted", "status": "RESOURCE_EXHAUSTED" } }
+```
+
+`tests/fixtures/gemini-responses/server-error.json` — mock fetch synthesizes 503:
+```json
+{ "error": { "code": 503, "message": "The service is currently unavailable.", "status": "UNAVAILABLE" } }
+```
+
+`tests/fixtures/gemini-responses/json-truncated.json` — Gemini envelope with `finishReason: "MAX_TOKENS"` and partial text (triggers TruncatedResponseError):
+```json
+{
+  "candidates": [{
+    "content": { "parts": [{ "text": "{\"documentation\":{\"value\":4,\"ration" }] },
+    "finishReason": "MAX_TOKENS"
+  }],
+  "usageMetadata": { "promptTokenCount": 1500, "candidatesTokenCount": 500 }
+}
+```
+
+**Fixture validity test** — create `tests/unit/pipeline/gemini/fixture-validity.test.ts`:
+
+```typescript
+import { describe, it, expect } from "vitest";
+import { buildScoringPrompt } from "@/lib/pipeline/gemini/scoring-prompt";
+import happy from "@/tests/fixtures/gemini-responses/happy.json";
+import semanticGarbage from "@/tests/fixtures/gemini-responses/schema-semantic-garbage.json";
+
+// These two fixtures represent successful Gemini responses that must satisfy
+// the live responseSchema. Schema drift (prompt version bump) must break
+// these tests loudly so we update fixtures in lockstep.
+describe("Gemini response fixtures validate against current schema", () => {
+  it("happy.json satisfies required fields", () => {
+    expect(happy).toHaveProperty("documentation.value");
+    expect(happy).toHaveProperty("code_health_readme.value");
+    expect(happy).toHaveProperty("category");
+    expect(happy).toHaveProperty("feature_tags_canonical");
+    expect(happy).toHaveProperty("evidence_strength");
+    expect(typeof happy.documentation.value).toBe("number");
+    expect(Number.isInteger(happy.documentation.value)).toBe(true);
+  });
+
+  it("schema-semantic-garbage.json satisfies required fields", () => {
+    expect(semanticGarbage).toHaveProperty("evidence_strength");
+    expect(semanticGarbage.evidence_strength).toBe("weak");
+  });
+
+  it("schema enum values match", () => {
+    const prompt = buildScoringPrompt({
+      owner: "x", name: "y", description: null, stars: 0,
+      lastCommitIso: "2026-04-14T00:00:00Z", license: null,
+      techStackSlugs: [], vibecodingToolSlugs: [],
+      hasReadme: false, hasPackageJson: false, readmeSections: "",
+    });
+    const schema = prompt.responseSchema as any;
+    const categories = schema.properties.category.enum;
+    expect(categories).toContain(happy.category);
+  });
+});
+```
 
 ### 10.2 apply-score-result-rpc.test.ts
 
