@@ -46,6 +46,34 @@ import type { JobContext } from "@/lib/types/jobs";
 const DEFAULT_BUDGET_MS = 250_000;
 const DEFAULT_BATCH_SIZE = 50;
 
+// Circuit breaker: guard against a catastrophic mass-removal. If a
+// pipeline bug (license-allowlist regression, 404-from-GitHub-outage,
+// rename-detection miscomputing full_name, etc.) would flip too many
+// live repos to `status='removed'` in one run, abort instead. The
+// already-removed repos before tripping are bounded to
+// `floor(MIN_PROCESSED * MAX_RATIO) + 1` → worst case ~3 rows at
+// defaults. Re-publishing them is a manual operator action.
+//
+// Tunable later via env if the empirical rate argues for it; defaults
+// picked to never false-positive on a healthy catalog (real removal
+// rate is «1%/week).
+const MAX_REMOVAL_RATIO = 0.1;
+const MIN_PROCESSED_BEFORE_CHECK = 20;
+
+export class ExcessiveRemovalError extends Error {
+  constructor(
+    readonly removed: number,
+    readonly processed: number,
+    readonly threshold: number,
+  ) {
+    super(
+      `refreshJob circuit breaker: removed ${removed}/${processed} repos ` +
+        `(${((removed / processed) * 100).toFixed(1)}%) exceeds ${(threshold * 100).toFixed(0)}% threshold — aborting`,
+    );
+    this.name = "ExcessiveRemovalError";
+  }
+}
+
 export interface RefreshInput {
   readonly maxRuntimeMs?: number;
   readonly batchSize?: number;
@@ -139,6 +167,16 @@ export async function refreshJob(
         if (Date.now() - startedAt >= budget) {
           timedOut = true;
           break;
+        }
+        // Circuit breaker: check BEFORE calling refreshOne so we never
+        // commit the removal that trips the threshold.
+        const processedSoFar = reposRefreshed + reposRemoved;
+        if (
+          processedSoFar >= MIN_PROCESSED_BEFORE_CHECK &&
+          reposRemoved / processedSoFar > MAX_REMOVAL_RATIO
+        ) {
+          ctx.metric("removal_ratio_tripped", 1);
+          throw new ExcessiveRemovalError(reposRemoved, processedSoFar, MAX_REMOVAL_RATIO);
         }
         try {
           const outcome = await refreshOne(ctx, repo);
