@@ -141,15 +141,50 @@ Skip if Docker unavailable; verify SQL by hand-review against schema in `supabas
 
 ### 1.2 Migration: marketplace RPCs
 
-- [ ] **Step 1.2.1:** Create `supabase/migrations/20260416000002_marketplace_rpcs.sql`. Full SQL is in **spec §5.2 + §5.3 + §5.4**. Copy verbatim.
+- [ ] **Step 1.2.1:** Create `supabase/migrations/20260416000002_marketplace_rpcs.sql`. Full SQL is in **spec §5.2 + §5.3 + §5.4**. Copy verbatim AND add the count variants below (per pre-execution reviewer fix).
 
 The migration creates:
 
 1. Composite type `public.marketplace_repo_row` (column shape returned by list functions)
 2. Function `public.list_repos_no_tags(p_q, p_category, p_min_score, p_vibecoding, p_sort, p_offset)` returning SETOF marketplace_repo_row
 3. Function `public.list_repos_with_tags(...same plus p_tags text[])` — same SELECT body plus extra `r.id IN (SELECT ... GROUP BY ... HAVING count(DISTINCT slug) = array_length(p_tags, 1))` for AND tag semantics
-4. Function `public.get_marketplace_facets()` returning jsonb (4-way UNION ALL aggregation, nested object_agg per facet type)
-5. Function `public.get_repo_detail(p_owner, p_name)` returning jsonb with repo + scores + tags + assets
+4. Function `public.list_repos_no_tags_count(p_q, p_category, p_min_score, p_vibecoding)` returning `int` — same WHERE clause as list_repos_no_tags but only `SELECT count(*)` (omits sort + offset)
+5. Function `public.list_repos_with_tags_count(p_q, p_category, p_min_score, p_vibecoding, p_tags)` returning `int` — same WHERE as list_repos_with_tags
+6. Function `public.get_marketplace_facets()` returning jsonb (4-way UNION ALL aggregation, nested object_agg per facet type)
+7. Function `public.get_repo_detail(p_owner, p_name)` returning jsonb with repo + scores + tags + assets
+
+**Important reviewer fixes to bake into the SQL:**
+
+- **`get_repo_detail` jsonb shape**: spec §5.4 has ellipses for the 3 tag aggregates. Inline them by mirroring the array_agg-FILTER-by-kind pattern from `list_repos_no_tags`:
+
+  ```sql
+  -- inside get_repo_detail SELECT (replace the spec's ellipses):
+  'feature_tags', coalesce((SELECT array_agg(DISTINCT t.slug ORDER BY t.slug)
+                            FROM public.repo_tags rt JOIN public.tags t ON t.id=rt.tag_id
+                            WHERE rt.repo_id = r.id AND t.kind='feature'), ARRAY[]::text[]),
+  'tech_stack_tags', coalesce((SELECT array_agg(DISTINCT t.slug ORDER BY t.slug)
+                               FROM public.repo_tags rt JOIN public.tags t ON t.id=rt.tag_id
+                               WHERE rt.repo_id = r.id AND t.kind='tech_stack'), ARRAY[]::text[]),
+  'vibecoding_tags', coalesce((SELECT array_agg(DISTINCT t.slug ORDER BY t.slug)
+                               FROM public.repo_tags rt JOIN public.tags t ON t.id=rt.tag_id
+                               WHERE rt.repo_id = r.id AND t.kind='vibecoding_tool'), ARRAY[]::text[]),
+  ```
+
+- **Variant B body**: spec §5.2 leaves `list_repos_with_tags` body as `/* identical to A */` comment. **Write it out fully** (~50 lines duplicated from variant A) — copy variant A's SELECT + LATERAL + WHERE block, then add the extra tag-AND clause:
+
+  ```sql
+  AND r.id IN (
+    SELECT rt2.repo_id FROM public.repo_tags rt2
+    JOIN public.tags t2 ON t2.id = rt2.tag_id
+    WHERE t2.slug = ANY(p_tags) AND t2.kind = 'feature'
+    GROUP BY rt2.repo_id
+    HAVING count(DISTINCT t2.slug) = array_length(p_tags, 1)
+  )
+  ```
+
+- **Hero asset WHERE clause** (`list_repos_*` LATERAL subquery): widen to all 4 asset kinds — `WHERE a.kind IN ('readme_gif','readme_image','demo_screenshot','ai_generated')` — and update the CASE ordering to give GIF priority 0, image 1, screenshot 2, ai_generated 3. This prevents repos with only demo_screenshot from missing a hero.
+
+- **Grants**: `GRANT EXECUTE ON FUNCTION public.list_repos_no_tags_count(text, public.repo_category, numeric, text) TO anon, authenticated;` (and same for `list_repos_with_tags_count`).
 
 **Key invariants the SQL MUST preserve** (from reviewer findings):
 
@@ -538,7 +573,8 @@ export function useDebouncedCallback<T extends (...args: never[]) => void>(
   const fnRef = useRef(fn);
   fnRef.current = fn;
 
-  const debounced = useRef<ReturnType<typeof debounce<T>>>();
+  // React 19 / @types/react 19 require initial value (no-arg overload removed).
+  const debounced = useRef<ReturnType<typeof debounce<T>> | undefined>(undefined);
   if (!debounced.current) {
     debounced.current = debounce(((...args: Parameters<T>) => fnRef.current(...args)) as T, delayMs);
   }
@@ -706,14 +742,25 @@ export async function listRepos(query: MarketplaceQuery): Promise<ListReposResul
   // biome-ignore lint/suspicious/noExplicitAny: RPC types regen pending (post-merge db:types)
   const dbAny = db as any;
 
-  const fnName = query.tags.length > 0 ? "list_repos_with_tags" : "list_repos_no_tags";
-  const params = query.tags.length > 0 ? { ...baseParams, p_tags: query.tags } : baseParams;
-  const { data, error } = await dbAny.rpc(fnName, params);
-  if (error) throw new Error(`listRepos failed: ${error.message}`);
-
-  // For totalCount: simpler to do a parallel COUNT(*) query than wedge it
-  // into the RPC. Acceptable cost at MVP scale.
-  const countResult = await dbAny.rpc(`${fnName}_count`, params);
+  const hasTags = query.tags.length > 0;
+  const fnName = hasTags ? "list_repos_with_tags" : "list_repos_no_tags";
+  const countFnName = hasTags ? "list_repos_with_tags_count" : "list_repos_no_tags_count";
+  const params = hasTags ? { ...baseParams, p_tags: query.tags } : baseParams;
+  // Count RPC takes the WHERE-clause params only (no sort/offset).
+  const countParams = {
+    p_q: query.q ?? null,
+    p_category: query.category ?? null,
+    p_min_score: query.min_score ?? null,
+    p_vibecoding: query.vibecoding ?? null,
+    ...(hasTags ? { p_tags: query.tags } : {}),
+  };
+  const [listResult, countResult] = await Promise.all([
+    dbAny.rpc(fnName, params),
+    dbAny.rpc(countFnName, countParams),
+  ]);
+  if (listResult.error) throw new Error(`listRepos failed: ${listResult.error.message}`);
+  if (countResult.error) throw new Error(`listRepos count failed: ${countResult.error.message}`);
+  const data = listResult.data;
   const totalCount = (countResult.data as number | null) ?? 0;
 
   return {
@@ -831,11 +878,20 @@ git commit -m "feat(marketplace): server-only queries + cached facets"
 - Modify: `package.json`
 - Modify: shadcn config + new components in `components/ui/`
 
-- [ ] **Step 4.1:** Install runtime dependencies:
+- [ ] **Step 4.1:** Install runtime + dev dependencies:
 
 ```bash
 pnpm add react-masonry-css isomorphic-dompurify
-pnpm add -D @types/react-masonry-css
+pnpm add -D @tailwindcss/typography
+```
+
+`react-masonry-css` ships its own `index.d.ts` — no `@types/...` needed.
+`@tailwindcss/typography` is required for the `prose` class used in `components/repo/readme-preview.tsx`.
+
+Add the typography plugin to `app/globals.css` (Tailwind v4 syntax):
+
+```css
+@plugin "@tailwindcss/typography";
 ```
 
 - [ ] **Step 4.2:** Install needed shadcn components (use defaults; tweak later if needed):
@@ -898,15 +954,12 @@ export default nextConfig;
 
 - [ ] **Step 5.3:** Modify `app/page.tsx` — remove `export const dynamic = "force-dynamic"` line. Keep the rest of the file as-is for now (Task 9 replaces the body).
 
-- [ ] **Step 5.4:** Verify:
+- [ ] **Step 5.4:** Verify (skip `pnpm build` here — Task 9 will replace `app/page.tsx` body, then run a full build):
 
 ```bash
-pnpm build  # build hangs would catch 'use cache' misuse
 pnpm lint
 pnpm typecheck
 ```
-
-If build hangs on the homepage's existing code, that's expected since Task 9 hasn't replaced it yet — abort with Ctrl-C and proceed.
 
 - [ ] **Step 5.5:** Commit:
 
@@ -1626,7 +1679,7 @@ import { RepoGrid } from "@/components/marketplace/repo-grid";
 import { Pagination } from "@/components/marketplace/pagination";
 import { EmptyState } from "@/components/marketplace/empty-state";
 import { GridSkeleton } from "@/components/marketplace/grid-skeleton";
-import type { PageProps } from "next";
+// PageProps is a global type generated by Next 16 into .next/types/ — do NOT import.
 
 export default async function Home(props: PageProps<"/">) {
   const sp = await props.searchParams;
@@ -1740,7 +1793,8 @@ export default function Error({ error, reset }: { error: Error; reset: () => voi
 
 ```tsx
 import { notFound } from "next/navigation";
-import type { Metadata, PageProps } from "next";
+import type { Metadata } from "next";
+// PageProps is a global type generated by Next 16 — do NOT import.
 import { getRepo } from "@/lib/marketplace/queries";
 import { RepoHero } from "@/components/repo/repo-hero";
 import { ScoreBreakdown } from "@/components/repo/score-breakdown";
@@ -1783,10 +1837,14 @@ export default async function RepoDetailPage(props: PageProps<"/r/[owner]/[name]
         tech_stack: repo.tech_stack_tags,
         vibecoding_tool: repo.vibecoding_tags,
       }} />
-      {/* README preview placeholder — readme markdown not stored in DB per D4=Y;
-          shows description summary until SP#4.5 mirror lands */}
+      {/* README full preview deferred to SP#4.5 (readme markdown not stored in DB per D4=Y).
+          For MVP, render description as a plain summary section — NOT inside ReadmePreview
+          which advertises "Documentation preview" and would mislead users/SEO. */}
       {repo.description && (
-        <ReadmePreview html={`<p>${escapeHtml(repo.description)}</p>`} />
+        <section aria-labelledby="summary-heading" className="space-y-2">
+          <h2 id="summary-heading" className="text-lg font-semibold">Summary</h2>
+          <p className="text-muted-foreground">{repo.description}</p>
+        </section>
       )}
       <ReviewsPlaceholder />
       <JsonLd repo={{ ...repo, total_score: repo.scores.total }} url={url} />
@@ -1794,13 +1852,7 @@ export default async function RepoDetailPage(props: PageProps<"/r/[owner]/[name]
   );
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+// (escapeHtml helper not needed — summary now uses plain <p> with React-rendered text.)
 ```
 
 ### 9.4 not-found + loading
@@ -1851,9 +1903,12 @@ import type { MetadataRoute } from "next";
 import { createAnonClient } from "@/lib/db";
 import { CATEGORIES } from "@/lib/marketplace/search-params";
 
+import { cacheLife, cacheTag } from "next/cache";
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   "use cache";
-  // (cacheLife not strictly needed at this scope; sitemap fetched infrequently)
+  cacheTag("repos:list");
+  cacheLife("hours");
 
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vibeshelf.example";
   const db = createAnonClient();
@@ -1918,7 +1973,7 @@ git commit -m "feat(app): marketplace home + repo detail + sitemap + loading/err
 
 ### 10.1 dep-cruiser rules
 
-- [ ] **Step 10.1.1:** Modify `dependency-cruiser.cjs` — add 2 marketplace rules to the `forbidden` array (place after F4 rule):
+- [ ] **Step 10.1.1:** Modify `dependency-cruiser.cjs` — add 1 marketplace rule to the `forbidden` array (place after F4 rule). The `marketplace-server-only` rule from the spec was dropped pre-execution; runtime `import 'server-only'` is sufficient enforcement.
 
 ```javascript
 {
@@ -1928,16 +1983,11 @@ git commit -m "feat(app): marketplace home + repo detail + sitemap + loading/err
   to: { path: "^lib/pipeline/" },
   comment: "Marketplace read-side and pipeline write-side share zero code",
 },
-{
-  name: "marketplace-server-only",
-  severity: "error",
-  from: { path: "^lib/marketplace/(queries|facets)\\.ts$" },
-  to: { path: "/node_modules/(react|next/client)/" },
-  comment: "queries/facets are server-only — no React or next/client imports",
-},
 ```
 
-### 10.2 Negative fixtures
+### 10.2 Negative fixture (just one — the marketplace→pipeline rule)
+
+The `marketplace-server-only` dep-cruiser rule from the spec was dropped during pre-execution review (the rule's path pattern doesn't reliably catch test fixtures, and `import 'server-only'` already enforces it at runtime via Next.js bundling). Only one negative fixture for `no-marketplace-imports-pipeline`:
 
 - [ ] **Step 10.2.1:** Create `lib/marketplace/__fixtures__/bad-pipeline-import.ts`:
 
@@ -1949,23 +1999,7 @@ import { echoJob } from "@/lib/pipeline/jobs/echo";
 export const _BAD_MARKETPLACE_PIPELINE_FIXTURE = echoJob;
 ```
 
-- [ ] **Step 10.2.2:** Create `lib/marketplace/__fixtures__/bad-react-import-in-queries.ts`:
-
-```typescript
-// Intentionally violates `marketplace-server-only` rule.
-// (Fixture filename mimics the queries.ts path matcher would catch it.)
-// dep-cruiser cruising this file matching the queries|facets pattern MUST fail.
-// To make the rule fire, we re-export so the import edge exists.
-import * as React from "react";
-
-export const _BAD_MARKETPLACE_REACT_FIXTURE = React;
-```
-
-**Note:** the `marketplace-server-only` rule's `from.path` regex matches `queries.ts` and `facets.ts` exact filenames. The fixture filename above doesn't match — so it won't trigger the rule via cruise. To genuinely test the server-only rule, we'd need to either rename the fixture to `queries-bad.ts` and adjust the rule, OR cruise from a file that matches the pattern. For MVP, the `no-marketplace-imports-pipeline` fixture is the meaningful one; the server-only rule is enforced by the `import 'server-only'` runtime check + Next.js bundling (any client-component import will fail at build).
-
-Therefore: drop the second fixture and rely on `import 'server-only'` for runtime enforcement.
-
-- [ ] **Step 10.2.3:** Delete `lib/marketplace/__fixtures__/bad-react-import-in-queries.ts` (per the note above) and remove the `marketplace-server-only` dep-cruiser rule (or keep it as belt-and-suspenders; runtime `'server-only'` is the primary defense).
+Skip 10.1.1's `marketplace-server-only` rule (only add the `no-marketplace-imports-pipeline` rule to dep-cruiser.cjs). Server-only enforcement happens via `import 'server-only'` in queries.ts and facets.ts (already specified in Task 3).
 
 ### 10.3 lint:neg update
 
@@ -2185,16 +2219,18 @@ describe("cron discover route invalidates tags from changedRepoIds", () => {
 
 ### 11.3 Playwright config
 
-- [ ] **Step 11.3.1:** Modify `playwright.config.ts` to add device projects:
+- [ ] **Step 11.3.1:** Modify `playwright.config.ts` to add device projects + globalSetup that seeds the local DB before the suite:
 
 ```typescript
 import { defineConfig, devices } from "@playwright/test";
+import path from "node:path";
 
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
   workers: 1,
   reporter: "list",
+  globalSetup: path.resolve("./tests/e2e/global-setup.ts"),
   use: {
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
@@ -2209,6 +2245,20 @@ export default defineConfig({
     reuseExistingServer: true,
   },
 });
+```
+
+- [ ] **Step 11.3.2:** Create `tests/e2e/global-setup.ts`:
+
+```typescript
+import { spawnSync } from "node:child_process";
+
+export default async function globalSetup(): Promise<void> {
+  console.log("[e2e] seeding local DB via pnpm seed:dev...");
+  const result = spawnSync("pnpm", ["seed:dev"], { stdio: "inherit" });
+  if (result.status !== 0) {
+    throw new Error(`[e2e] seed:dev failed with status ${result.status}`);
+  }
+}
 ```
 
 ### 11.4 E2E tests
