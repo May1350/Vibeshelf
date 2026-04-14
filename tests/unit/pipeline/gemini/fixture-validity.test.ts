@@ -4,9 +4,9 @@
 // satisfying the shape that scoreRepo's parseLlmResponse expects.
 
 import { describe, expect, it } from "vitest";
+import { buildScoringPrompt } from "@/lib/pipeline/gemini/scoring-prompt";
 import happy from "@/tests/fixtures/gemini-responses/happy.json";
 import semanticGarbage from "@/tests/fixtures/gemini-responses/schema-semantic-garbage.json";
-import { buildScoringPrompt } from "@/lib/pipeline/gemini/scoring-prompt";
 
 describe("Gemini response fixtures validate against current schema", () => {
   it("happy.json has all required fields", () => {

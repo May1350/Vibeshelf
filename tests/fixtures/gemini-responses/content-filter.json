@@ -2,9 +2,7 @@
   "candidates": [
     {
       "finishReason": "SAFETY",
-      "safetyRatings": [
-        { "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "probability": "HIGH" }
-      ]
+      "safetyRatings": [{ "category": "HARM_CATEGORY_DANGEROUS_CONTENT", "probability": "HIGH" }]
     }
   ],
   "usageMetadata": { "promptTokenCount": 1000, "candidatesTokenCount": 0 }

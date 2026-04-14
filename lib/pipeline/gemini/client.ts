@@ -113,7 +113,7 @@ export class GeminiClient {
         // 5xx — retry with exponential backoff.
         if (isServerError(err)) {
           if (attempt < MAX_RETRIES) {
-            await sleep(Math.pow(4, attempt) * 500);
+            await sleep(4 ** attempt * 500);
             continue;
           }
           throw new GeminiServerError(extractStatus(err) ?? 500, describeError(err));
