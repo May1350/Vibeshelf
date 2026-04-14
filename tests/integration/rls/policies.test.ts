@@ -132,8 +132,10 @@ describe("user_profiles_update_own", () => {
     // Attempt to update a column the user doesn't have grant for
     const { error } = await client
       .from("user_profiles")
-      // @ts-expect-error — intentionally updating a column the user lacks GRANT for
-      .update({ github_id: 999999 })
+      // Cast to any: we intentionally update a column the user lacks GRANT for,
+      // and the types now exclude it. Postgres returns 42501 at runtime.
+      // biome-ignore lint/suspicious/noExplicitAny: intentional negative test
+      .update({ github_id: 999999 } as any)
       .eq("id", userId);
 
     // PostgREST returns 42501 (permission denied) for column-level grant violations
@@ -244,11 +246,11 @@ describe("repo_scores_select_latest_published", () => {
     const { data, error } = await client
       .from("repo_scores")
       .select("id")
-      .eq("id", score?.id)
+      .eq("id", score!.id)
       .single();
 
     expect(error).toBeNull();
-    expect(data?.id).toBe(score?.id);
+    expect(data?.id).toBe(score!.id);
   });
 
   it("denies seeing is_latest=false row", async () => {
@@ -273,7 +275,7 @@ describe("repo_scores_select_latest_published", () => {
 
     const { client } = await createTestUser();
 
-    const { data } = await client.from("repo_scores").select("id").eq("id", score?.id);
+    const { data } = await client.from("repo_scores").select("id").eq("id", score!.id);
 
     expect(data).toHaveLength(0);
   });
@@ -300,7 +302,7 @@ describe("repo_scores_select_latest_published", () => {
 
     const { client } = await createTestUser();
 
-    const { data } = await client.from("repo_scores").select("id").eq("id", score?.id);
+    const { data } = await client.from("repo_scores").select("id").eq("id", score!.id);
 
     expect(data).toHaveLength(0);
   });
@@ -343,7 +345,7 @@ describe("repo_tags_select_published", () => {
 
     await svc.from("repo_tags").insert({
       repo_id: repo.id,
-      tag_id: tag?.id,
+      tag_id: tag!.id,
       source: "ai",
     });
 
@@ -367,7 +369,7 @@ describe("repo_tags_select_published", () => {
 
     await svc.from("repo_tags").insert({
       repo_id: repo.id,
-      tag_id: tag?.id,
+      tag_id: tag!.id,
       source: "ai",
     });
 
@@ -656,7 +658,7 @@ describe("review_assets_delete_own", () => {
       .select("id")
       .single();
 
-    const { error } = await client.from("review_assets").delete().eq("id", asset?.id);
+    const { error } = await client.from("review_assets").delete().eq("id", asset!.id);
 
     // If storage service is running, this succeeds cleanly (error is null).
     // If storage service is unavailable, the cleanup trigger fails with 42501.
@@ -667,7 +669,7 @@ describe("review_assets_delete_own", () => {
       expect(error.message).toContain("storage");
     } else {
       // Full success — verify row is gone
-      const { data } = await svc.from("review_assets").select("id").eq("id", asset?.id);
+      const { data } = await svc.from("review_assets").select("id").eq("id", asset!.id);
 
       expect(data).toHaveLength(0);
     }
@@ -690,10 +692,10 @@ describe("review_assets_delete_own", () => {
       .select("id")
       .single();
 
-    await otherClient.from("review_assets").delete().eq("id", asset?.id);
+    await otherClient.from("review_assets").delete().eq("id", asset!.id);
 
     // Verify NOT deleted (RLS blocks the delete silently — 0 rows affected)
-    const { data } = await svc.from("review_assets").select("id").eq("id", asset?.id);
+    const { data } = await svc.from("review_assets").select("id").eq("id", asset!.id);
 
     expect(data).toHaveLength(1);
   });

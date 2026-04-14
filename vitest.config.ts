@@ -17,6 +17,7 @@ export default defineConfig({
       TOKEN_ENCRYPTION_KEY_V1: "OFcwVXjTtYGTXwzWU9CM5kRCj/AkYNTY3a6ZZYV1vUo=",
       GITHUB_CLIENT_ID: "test-client-id",
       GITHUB_CLIENT_SECRET: "test-client-secret",
+      CRON_SECRET: "test-cron-secret",
     },
   },
 });

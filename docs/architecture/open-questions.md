@@ -13,27 +13,9 @@
 
 ## Q-01. Automated demo screenshot capture (PRD §5.1 priority 3)
 
-**Status:** Deferred from Foundation. Schema supports it; implementation does not exist.
+**Status:** Deferred (re-confirmed 2026-04-14 during sub-project #2 brainstorming). Ingestion MVP populates tiers 1, 2, 4 only via `extractReadmeMedia`. Tier 3 (`demo_screenshot` asset kind) remains reserved in the schema with no writer. Re-open if post-launch analytics show a material CTR gap for repos lacking README media (≥15%) or if a user complaint stream emerges.
 
-**Background:** PRD §5.1 specifies a 4-tier preview priority where tier 3 is "데모 URL 감지 시 Puppeteer로 자동 스크린샷 생성". Foundation brainstorming chose to ship MVP with tiers 1, 2, and 4 only (README-embedded media + AI text fallback) because:
-- Adding headless browser execution on day one would immediately trigger rule #2 of `future-separation-plan.md`, undermining the "single Next.js app" decision.
-- Well-curated GitHub templates (the ones our scoring rewards) typically have README media already — priority 3 covers an estimated 10-15% edge case.
-- Adding this post-MVP is ~2-3 days of work because schema already supports it.
-
-**What's reserved in Foundation:**
-- `asset_kind` enum includes `'demo_screenshot'` as a valid value (unused in MVP).
-- `repo_assets` columns `storage_key`, `external_url`, `source_url`, `content_type`, `width`, `height` accept captured images whenever implementation lands.
-
-**Open sub-questions (when implementation is decided):**
-1. External API (ScreenshotOne, Urlbox, Apiflash, Microlink) vs Vercel Sandbox vs never.
-2. Re-capture cadence: tied to the monthly re-score cycle? event-driven on repo update? manual only?
-3. Failure handling: if capture fails for a repo, does it still publish (with "프리뷰 없음" badge) or stay unpublished?
-4. Cost monitoring: if external API is chosen, budget alerting and per-repo cost cap.
-5. Stale capture detection: how do we notice when a captured screenshot no longer matches the current demo?
-
-**Re-open when:** Starting sub-project #2 (ingestion) or #3 (evaluation) brainstorming. Additionally, if post-launch analytics show ≥15% of published repos would benefit from automated capture (user CTR gap between repos with and without preview media, or explicit user complaints).
-
-**Triggering this item also means reopening `future-separation-plan.md`** — trigger #2 (headless Chrome) activates the moment this is implemented.
+**Triggering this item also reopens `future-separation-plan.md`** — trigger #2 (headless Chrome) activates the moment this is implemented.
 
 ---
 
@@ -69,18 +51,17 @@
 
 ---
 
-## Q-04. Mutable data re-fetch / re-score policy
+## Q-04. Mutable data re-fetch / re-score policy — RESOLVED in sub-project #2
 
-**Status:** Deferred. PRD §4.1 specifies re-score cadence but operational details are missing.
+**Status:** Resolved 2026-04-14. The weekly `refreshJob` (`lib/pipeline/jobs/refresh.ts`) implements the mutable-data policy:
 
-**Background:** The ingestion pipeline needs concrete answers for:
-1. **README content drift:** Did the README text change? We store `readme_sha` — who computes and compares it? On what schedule?
-2. **Metric drift:** Stars/forks/watchers update continuously. Do we store historical points in `repo_scores.raw_response.metrics_snapshot`, or only keep current?
-3. **Repo rename/transfer:** GitHub allows renaming owner/name. What's our detection signal and update path? Do fork events and reviews migrate cleanly?
-4. **Repo deleted/archived:** Retention policy for `reviews`, `fork_events`, `repo_assets` when parent repo transitions to `removed` status.
-5. **License change mid-curation:** A permissive repo relicensed to GPL — do we auto-remove, flag for manual review, or grandfather?
+1. **README drift:** `readme_sha` compared on every refresh via the `/repos/{owner}/{name}/readme` endpoint. Drift triggers re-fetch and re-extract. (Re-scoring is sub-project #3's responsibility; refresh only records the drift signal.)
+2. **Metric drift:** Current values overwrite previous in `repos` on every refresh. Historical snapshots live in `repo_scores.raw_response` (sub-project #3).
+3. **Repo rename/transfer:** GitHub auto-redirects via 301 on `/repos/{owner}/{name}`; the response body carries the new `full_name`, which the refresh job compares and updates. `fork_events` + `reviews` FK to `repos.id` (stable uuid), so the rename doesn't break their links.
+4. **Repo deleted/archived:** 404 on refresh → `status='removed'`. `fork_events`, `reviews`, `repo_assets` CASCADE-retain per their FK clauses from Foundation (no explicit retention policy; rows stay linked via `repos.id`).
+5. **License change mid-curation:** Non-permissive license detected on refresh → `status='removed'` immediately (no grandfathering, no manual review). Users whose forks exist still have them; we just stop surfacing the repo in the marketplace.
 
-**Re-open when:** Starting sub-project #2 (ingestion) brainstorming.
+**Retired sub-questions:** all 5 answered above. The only remaining judgment call is dormant-deletion retention (kept as `status='dormant'` indefinitely for now — sub-project #6 may revisit).
 
 ---
 
@@ -121,6 +102,41 @@ Foundation has one lever for this: `repo_scores` is append-only with `scoring_pr
 
 ---
 
+## Q-07. GitHub token pool management (surfaced in sub-project #2)
+
+**Status:** New. Implementation exists (`lib/pipeline/github/token-pool.ts`) but operational policy is undefined.
+
+**Background:** The token pool holds PATs / GitHub App installation tokens with scope `'search' | 'rest' | 'graphql'`. The ingestion pipeline rotates them via `acquire_github_token` RPC (SKIP LOCKED). Open operational questions:
+
+1. **Token provisioning:** Who creates the PATs? Rotation cadence (90 days? never unless leaked?). Who owns the process when the pool runs dry?
+2. **Disabled token recovery:** `disableToken` sets `disabled_at` on 401. Is there a re-enable path (ops dashboard? manual SQL?) or are disabled tokens dead forever?
+3. **Pool sizing:** 2-3 tokens is enough for W1 (200 repos/day). What's the trigger to add a 4th? Daily `api_calls_made` metric ≥ 80% of `5000 × N_tokens`?
+4. **`disabled_reason` column:** Currently the reason is logged to stdout only. Adding a text column would make incident triage possible without grepping logs.
+
+**Re-open when:** First production discover run, OR when migrating from PATs to GitHub App installation tokens (Q-07.5), OR when pool exhaustion causes a job failure in prod.
+
+---
+
+## Q-08. Cron route observability gap (surfaced in sub-project #2)
+
+**Status:** New. PostToolUse validation flagged it during route creation.
+
+**Background:** Cron route handlers (`app/api/cron/*/route.ts`) are thin adapters — they auth-check, call `runJob`, return the result. `runJob` writes `pipeline_runs` rows with status/metrics/error, so the job body IS instrumented. But the ROUTE layer has no logging for:
+
+- 401 unauthorized attempts (spam from public endpoint probing)
+- Bodyless 5xx before `runJob` even runs (Next.js-level exception)
+- Latency between cron trigger and job start (useful for diagnosing Vercel cron drift)
+
+**Options:**
+1. Accept gap for MVP (simplest; Vercel function logs already capture 401s and exceptions).
+2. Add a lightweight `logRouteEvent` helper that writes to a new `cron_audit` table.
+3. Defer to Q-06 (observability baseline) resolution.
+
+**Re-open when:** First production incident where the route-level gap caused blindness, OR when Q-06 lands.
+
+---
+
 ## Revision log
 
 - **2026-04-11** — File created during Foundation brainstorming two-reviewer pass. Seeded with Q-01 through Q-06.
+- **2026-04-14** — Sub-project #2 (ingestion) brainstorming completed. Q-04 resolved (weekly refreshJob implements mutable-data policy). Q-01 kept deferred (no Puppeteer in MVP). Added Q-07 (token pool operational policy) and Q-08 (cron route observability gap).

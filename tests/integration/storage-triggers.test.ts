@@ -65,7 +65,7 @@ describe("storage cleanup trigger", () => {
       .select("id")
       .single();
 
-    const storageKey = `${userId}/${review?.id}/0.png`;
+    const storageKey = `${userId}/${review!.id}/0.png`;
 
     // Upload a file to storage
     const fileContent = new Blob(["fake-png-content"], {
@@ -83,19 +83,19 @@ describe("storage cleanup trigger", () => {
 
     // Insert review_assets row
     await svc.from("review_assets").insert({
-      review_id: review?.id,
+      review_id: review!.id,
       storage_key: storageKey,
       content_type: "image/png",
       ordering: 0,
     });
 
     // Delete the review (cascades to review_assets, triggering cleanup)
-    await svc.from("reviews").delete().eq("id", review?.id);
+    await svc.from("reviews").delete().eq("id", review!.id);
 
     // Verify storage object is gone
     const { data: objects } = await svc.storage
       .from("review-assets")
-      .list(`${userId}/${review?.id}`);
+      .list(`${userId}/${review!.id}`);
 
     expect(objects).toHaveLength(0);
   });
@@ -142,8 +142,8 @@ describe("storage cleanup trigger", () => {
     // the trigger handles missing objects gracefully (DELETE WHERE ...
     // matches 0 rows = no error).
     const { error: insertErr } = await svc.from("review_assets").insert({
-      review_id: review?.id,
-      storage_key: `${userId}/${review?.id}/0.png`,
+      review_id: review!.id,
+      storage_key: `${userId}/${review!.id}/0.png`,
       content_type: "image/png",
       ordering: 0,
     });
@@ -154,7 +154,7 @@ describe("storage cleanup trigger", () => {
     const { data: before } = await svc
       .from("review_assets")
       .select("id")
-      .eq("review_id", review?.id);
+      .eq("review_id", review!.id);
 
     expect(before).toHaveLength(1);
 
@@ -163,7 +163,7 @@ describe("storage cleanup trigger", () => {
     // WHERE bucket_id = 'review-assets' AND name = old.storage_key.
     // Since no matching storage.objects row exists, the DELETE affects
     // 0 rows, and the cascade completes successfully.
-    const { error: deleteErr } = await svc.from("reviews").delete().eq("id", review?.id);
+    const { error: deleteErr } = await svc.from("reviews").delete().eq("id", review!.id);
 
     if (deleteErr) {
       // If storage service blocks the trigger, the cascade fails.
@@ -173,7 +173,7 @@ describe("storage cleanup trigger", () => {
       const { data: reviewStillExists } = await svc
         .from("reviews")
         .select("id")
-        .eq("id", review?.id);
+        .eq("id", review!.id);
 
       expect(reviewStillExists).toHaveLength(1);
       return; // Skip the rest — storage service needed
@@ -183,7 +183,7 @@ describe("storage cleanup trigger", () => {
     const { data: after } = await svc
       .from("review_assets")
       .select("id")
-      .eq("review_id", review?.id);
+      .eq("review_id", review!.id);
 
     expect(after).toHaveLength(0);
   });
