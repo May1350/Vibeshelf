@@ -513,14 +513,15 @@ BEGIN
   WHERE repo_id = p_repo_id AND is_latest = true;
 
   -- Step 5: insert new repo_scores row
+  -- (vibecoding_compat_score was dropped in migration 20260415000001)
   INSERT INTO public.repo_scores (
     repo_id, documentation_score, maintenance_score, popularity_score,
-    code_health_score, vibecoding_compat_score, visual_preview_score,
+    code_health_score, visual_preview_score,
     scoring_model, scoring_prompt_version, raw_response, rationale,
     evidence_strength, run_id, is_latest
   ) VALUES (
     p_repo_id, p_documentation_score, p_maintenance_score, p_popularity_score,
-    p_code_health_score, 0, p_visual_preview_score,
+    p_code_health_score, p_visual_preview_score,
     p_model, p_prompt_version, '{}'::jsonb, p_rationale,
     p_evidence_strength, p_run_id, true
   );
