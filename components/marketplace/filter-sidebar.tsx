@@ -31,7 +31,9 @@ interface FilterSidebarProps {
  * - `<form action="/" method="GET">`: works with JS disabled (Apply button submits).
  * - Hidden `page=1` input resets pagination on every filter change.
  * - Search: 350ms debounce. Checkboxes/radios: 200ms batched debounce.
- * - "Any" radio is the first option for category/min_score/vibecoding because
+ * - Category is multi-select checkboxes (OR semantics). Empty selection = no filter,
+ *   so no "Any" pseudo-option is needed (matches tags pattern).
+ * - "Any" radio is the first option for min_score/vibecoding because
  *   HTML radios can't be deselected once clicked (Critical R2.C1).
  * - Top-10 tags rendered inline; overflow tucked behind `<details>` "Show all".
  * - `w-72` minimum width is expansion-safe for Korean labels (Real R2.R4).
@@ -69,26 +71,16 @@ export function FilterSidebar({ initial, facets, className }: FilterSidebarProps
           />
         </div>
 
-        {/* Category — radio with explicit "Any" first option (clearable) */}
+        {/* Category — multi-select checkboxes, OR semantics */}
         <fieldset className="space-y-1">
-          <legend className="text-sm font-medium">Category</legend>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="radio"
-              name="category"
-              value=""
-              defaultChecked={!initial.category}
-              onChange={batchedSubmit}
-            />
-            Any
-          </label>
+          <legend className="text-sm font-medium">Category (OR)</legend>
           {CATEGORIES.map((c) => (
             <label key={c} className="flex items-center gap-2 text-sm">
               <input
-                type="radio"
-                name="category"
+                type="checkbox"
+                name="categories"
                 value={c}
-                defaultChecked={initial.category === c}
+                defaultChecked={initial.categories.includes(c)}
                 onChange={batchedSubmit}
               />
               <span>{humanize(c)}</span>

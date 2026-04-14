@@ -7,12 +7,13 @@ describe("parseMarketplaceParams", () => {
     expect(r.sort).toBe("score");
     expect(r.page).toBe(1);
     expect(r.tags).toEqual([]);
+    expect(r.categories).toEqual([]);
   });
 
   it("parses all filters", () => {
     const r = parseMarketplaceParams({
       q: "stripe",
-      category: "saas",
+      categories: "saas,ai_tool",
       tags: "auth,payments",
       min_score: "4",
       vibecoding: "cursor",
@@ -20,7 +21,7 @@ describe("parseMarketplaceParams", () => {
       page: "2",
     });
     expect(r.q).toBe("stripe");
-    expect(r.category).toBe("saas");
+    expect(r.categories).toEqual(["saas", "ai_tool"]);
     expect(r.tags).toEqual(["auth", "payments"]);
     expect(r.min_score).toBe(4);
     expect(r.vibecoding).toBe("cursor");
@@ -48,9 +49,14 @@ describe("parseMarketplaceParams", () => {
     expect(r.q).toBeUndefined();
   });
 
-  it("rejects invalid category enum (falls back to defaults)", () => {
-    const r = parseMarketplaceParams({ category: "not_a_category" });
-    expect(r.category).toBeUndefined();
+  it("silently drops unknown categories from CSV", () => {
+    const r = parseMarketplaceParams({ categories: "saas,not_real,blog" });
+    expect(r.categories).toEqual(["saas", "blog"]);
+  });
+
+  it("returns empty array when all categories are invalid", () => {
+    const r = parseMarketplaceParams({ categories: "fake,bogus" });
+    expect(r.categories).toEqual([]);
   });
 
   it("coerces page to int min 1", () => {
@@ -60,13 +66,21 @@ describe("parseMarketplaceParams", () => {
     expect(r2.page).toBe(5);
   });
 
-  it("handles array values (takes first)", () => {
-    const r = parseMarketplaceParams({ category: ["saas", "blog"] });
-    expect(r.category).toBe("saas");
+  it("joins repeated form-submit categories into CSV before parsing", () => {
+    // Simulates what Next.js gives us when an HTML form submits multiple
+    // checked checkboxes with name="categories".
+    const r = parseMarketplaceParams({ categories: ["saas", "ai_tool"] });
+    expect(r.categories).toEqual(["saas", "ai_tool"]);
+  });
+
+  it("joins repeated form-submit tags into CSV before parsing", () => {
+    const r = parseMarketplaceParams({ tags: ["auth", "payments"] });
+    expect(r.tags).toEqual(["auth", "payments"]);
   });
 
   it("MarketplaceParams schema accepts undefined optional fields", () => {
     const r = MarketplaceParams.parse({});
     expect(r.tags).toEqual([]);
+    expect(r.categories).toEqual([]);
   });
 });

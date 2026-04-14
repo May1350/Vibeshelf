@@ -45,7 +45,7 @@ async function ReposSection({ query }: { query: ReturnType<typeof parseMarketpla
 
   if (items.length === 0) {
     // Recommendations: top-scored repos when current query has no results.
-    const recs = await listRepos({ sort: "score", page: 1, tags: [] });
+    const recs = await listRepos({ sort: "score", page: 1, tags: [], categories: [] });
     return <EmptyState recommendations={recs.items.slice(0, 6)} />;
   }
 
@@ -54,7 +54,7 @@ async function ReposSection({ query }: { query: ReturnType<typeof parseMarketpla
   function buildHref(page: number): string {
     const url = new URLSearchParams();
     if (query.q) url.set("q", query.q);
-    if (query.category) url.set("category", query.category);
+    if (query.categories.length) url.set("categories", query.categories.join(","));
     if (query.tags.length) url.set("tags", query.tags.join(","));
     if (query.min_score !== undefined) url.set("min_score", String(query.min_score));
     if (query.vibecoding) url.set("vibecoding", query.vibecoding);

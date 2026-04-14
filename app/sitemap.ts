@@ -25,7 +25,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   const categories = CATEGORIES.map((c) => ({
-    url: `${base}/?category=${c}`,
+    url: `${base}/?categories=${c}`,
     lastModified: new Date().toISOString(),
     priority: 0.6,
   }));

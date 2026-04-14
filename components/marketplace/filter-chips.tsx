@@ -63,18 +63,20 @@ export function FilterChips({ initial }: FilterChipsProps) {
     [navigate, params],
   );
 
-  const removeTag = useCallback(
-    (tag: string) => {
-      const current = (params.get("tags") ?? "")
+  // Multi-value chip removal: drop one entry from a CSV-encoded query param
+  // (?tags=foo,bar → click X on "foo" → ?tags=bar; last one removes the key).
+  const removeFromCsv = useCallback(
+    (key: string, value: string) => {
+      const current = (params.get(key) ?? "")
         .split(",")
         .map((t) => t.trim())
         .filter(Boolean);
-      const remaining = current.filter((t) => t !== tag);
+      const remaining = current.filter((t) => t !== value);
       const next = new URLSearchParams(params.toString());
       if (remaining.length > 0) {
-        next.set("tags", remaining.join(","));
+        next.set(key, remaining.join(","));
       } else {
-        next.delete("tags");
+        next.delete(key);
       }
       navigate(next);
     },
@@ -83,7 +85,7 @@ export function FilterChips({ initial }: FilterChipsProps) {
 
   const hasAny =
     Boolean(initial.q) ||
-    Boolean(initial.category) ||
+    initial.categories.length > 0 ||
     typeof initial.min_score === "number" ||
     Boolean(initial.vibecoding) ||
     initial.tags.length > 0;
@@ -97,14 +99,15 @@ export function FilterChips({ initial }: FilterChipsProps) {
           Search: {initial.q}
         </Chip>
       )}
-      {initial.category && (
+      {initial.categories.map((c) => (
         <Chip
-          ariaLabel={`Remove Category: ${initial.category} filter`}
-          onRemove={() => removeKey("category")}
+          key={c}
+          ariaLabel={`Remove Category: ${c} filter`}
+          onRemove={() => removeFromCsv("categories", c)}
         >
-          Category: {initial.category}
+          Category: {c}
         </Chip>
-      )}
+      ))}
       {typeof initial.min_score === "number" && (
         <Chip
           ariaLabel={`Remove minimum score ${initial.min_score} filter`}
@@ -122,7 +125,11 @@ export function FilterChips({ initial }: FilterChipsProps) {
         </Chip>
       )}
       {initial.tags.map((t) => (
-        <Chip key={t} ariaLabel={`Remove tag: ${t} filter`} onRemove={() => removeTag(t)}>
+        <Chip
+          key={t}
+          ariaLabel={`Remove tag: ${t} filter`}
+          onRemove={() => removeFromCsv("tags", t)}
+        >
           {t}
         </Chip>
       ))}

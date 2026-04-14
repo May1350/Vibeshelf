@@ -24,7 +24,7 @@ interface FilterDrawerProps {
 function countActiveFilters(initial: MarketplaceQuery): number {
   let n = 0;
   if (initial.q) n += 1;
-  if (initial.category) n += 1;
+  n += initial.categories.length;
   if (typeof initial.min_score === "number") n += 1;
   if (initial.vibecoding) n += 1;
   n += initial.tags.length;

@@ -52,9 +52,11 @@ export interface ListReposResult {
 export async function listRepos(query: MarketplaceQuery): Promise<ListReposResult> {
   const db = createAnonClient();
   const offset = (query.page - 1) * 36;
+  // Empty array → null (RPC treats either as "no category filter").
+  const categoriesParam = query.categories.length > 0 ? query.categories : null;
   const baseParams = {
     p_q: query.q ?? null,
-    p_category: query.category ?? null,
+    p_categories: categoriesParam,
     p_min_score: query.min_score ?? null,
     p_vibecoding: query.vibecoding ?? null,
     p_sort: query.sort,
@@ -71,7 +73,7 @@ export async function listRepos(query: MarketplaceQuery): Promise<ListReposResul
   // Count RPC takes the WHERE-clause params only (no sort/offset).
   const countParams = {
     p_q: query.q ?? null,
-    p_category: query.category ?? null,
+    p_categories: categoriesParam,
     p_min_score: query.min_score ?? null,
     p_vibecoding: query.vibecoding ?? null,
     ...(hasTags ? { p_tags: query.tags } : {}),
