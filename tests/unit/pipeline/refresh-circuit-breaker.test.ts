@@ -11,24 +11,29 @@ import { describe, expect, it } from "vitest";
 import { ExcessiveRemovalError } from "@/lib/pipeline/jobs/refresh";
 
 describe("ExcessiveRemovalError", () => {
-  it("carries the removed/processed/threshold fields", () => {
-    const err = new ExcessiveRemovalError(5, 20, 0.1);
-    expect(err.removed).toBe(5);
-    expect(err.processed).toBe(20);
-    expect(err.threshold).toBe(0.1);
+  it("carries the removed/processed/reason fields", () => {
+    const err = new ExcessiveRemovalError(11, 11, "absolute-cap");
+    expect(err.removed).toBe(11);
+    expect(err.processed).toBe(11);
+    expect(err.reason).toBe("absolute-cap");
     expect(err.name).toBe("ExcessiveRemovalError");
   });
 
-  it("message reports the percent exceeded and the threshold", () => {
-    const err = new ExcessiveRemovalError(3, 20, 0.1);
-    expect(err.message).toContain("removed 3/20");
+  it("message reports the would-be ratio and the reason", () => {
+    const err = new ExcessiveRemovalError(3, 20, "ratio-exceeded");
+    expect(err.message).toContain("would-be-removed=3/20");
     expect(err.message).toContain("15.0%");
-    expect(err.message).toContain("10%");
+    expect(err.message).toContain("ratio-exceeded");
     expect(err.message).toContain("aborting");
   });
 
+  it("handles zero-processed edge case without divide-by-zero", () => {
+    const err = new ExcessiveRemovalError(0, 0, "absolute-cap");
+    expect(err.message).toContain("n/a");
+  });
+
   it("is a subclass of Error so runJob's catch writes pipeline_runs.status='failed'", () => {
-    const err = new ExcessiveRemovalError(1, 10, 0.1);
+    const err = new ExcessiveRemovalError(1, 10, "absolute-cap");
     expect(err).toBeInstanceOf(Error);
   });
 });
