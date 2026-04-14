@@ -10,7 +10,7 @@
     "lint:neg:depcruise": "! depcruise -c dependency-cruiser.cjs lib/pipeline/__fixtures__/bad-pipeline-import.ts 2>/dev/null && ! depcruise -c dependency-cruiser.cjs lib/pipeline/jobs/__fixtures__/bad-score-service-import.ts 2>/dev/null && ! depcruise -c dependency-cruiser.cjs lib/marketplace/__fixtures__/bad-pipeline-import.ts 2>/dev/null",
     "lint:neg:eslint": "! eslint lib/__fixtures__/bad-process-env.ts 2>/dev/null",
     "lint:neg": "pnpm lint:neg:depcruise && pnpm lint:neg:eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run tests/unit tests/integration",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
