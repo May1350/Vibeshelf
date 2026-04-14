@@ -179,6 +179,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - uses: supabase/setup-cli@v1
+        with: { version: latest }
       - run: supabase start
       - name: Populate .env.local
         env:
@@ -195,6 +196,7 @@ jobs:
             "TOKEN_ENCRYPTION_KEY_V1=$TOKEN_KEY" \
             "GITHUB_CLIENT_ID=test-client-id" \
             "GITHUB_CLIENT_SECRET=test-client-secret" \
+            "CRON_SECRET=test-cron-secret" \
             > .env.local
           chmod 600 .env.local
       - run: pnpm exec playwright install --with-deps chromium
