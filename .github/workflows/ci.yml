@@ -112,9 +112,6 @@ jobs:
         run: gunzip -c /tmp/supabase-images.tar.gz | docker load
       - name: Start Supabase stack
         run: supabase start
-      - name: Save Docker images to cache (first run only)
-        if: steps.docker-cache.outputs.cache-hit != 'true'
-        run: docker save $(docker images --format '{{.Repository}}:{{.Tag}}' | grep -v '<none>') | gzip > /tmp/supabase-images.tar.gz
       - name: Populate .env.test.local
         env:
           TOKEN_KEY: ${{ secrets.TEST_TOKEN_ENCRYPTION_KEY_V1 }}
@@ -143,6 +140,22 @@ jobs:
           diff /tmp/database.types.ts lib/db/database.types.ts
       - name: Run integration tests
         run: pnpm test:integration
+      # Cache Supabase images AFTER tests so a slow save can't block test
+      # signal. Filter to supabase-only images — saving every image on
+      # the runner (Node, Postgres pre-installed, etc.) was hanging the
+      # job for >15 min on cold cache.
+      - name: Save Docker images to cache (first run only)
+        if: steps.docker-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          IMAGES=$(docker images --format '{{.Repository}}:{{.Tag}}' | grep '^public.ecr.aws/supabase' || true)
+          if [ -z "$IMAGES" ]; then
+            echo "No supabase images found to cache"; exit 0
+          fi
+          # shellcheck disable=SC2086
+          docker save $IMAGES | gzip > /tmp/supabase-images.tar.gz
       - if: always()
         run: supabase stop
 
