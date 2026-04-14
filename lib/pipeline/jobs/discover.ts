@@ -20,7 +20,6 @@
 // Concurrency lives inside fetchRepoDetailsBatch (capped at 5).
 
 import { extractReadmeMedia } from "@/lib/pipeline/extractors/readme-media";
-import type { ExtractedTag } from "@/lib/pipeline/extractors/tech-stack";
 import { extractTechStack } from "@/lib/pipeline/extractors/tech-stack";
 import { extractVibecodingCompat } from "@/lib/pipeline/extractors/vibecoding-compat";
 import { rpcAcquirePipelineLock, rpcReleasePipelineLock } from "@/lib/pipeline/github/db-rpc";
@@ -32,6 +31,7 @@ import type {
 import { fetchRepoDetailsBatch } from "@/lib/pipeline/github/repo-details";
 import type { SearchResultRepo } from "@/lib/pipeline/github/search";
 import { buildDailySearchBatch, dryRunSearch, executeSearch } from "@/lib/pipeline/github/search";
+import { type TagInput, upsertAndLinkTags } from "@/lib/pipeline/tags/resolve";
 import type { JobContext } from "@/lib/types/jobs";
 
 const DEFAULT_MAX_QUERIES = 20;
@@ -208,7 +208,11 @@ async function ingestOne(
   // Tags: resolve/create tag IDs in batch, then insert repo_tags.
   const allTags = [...techTags, ...vibecodingTags];
   if (allTags.length > 0) {
-    await insertRepoTags(ctx, repoId, allTags);
+    const tagInputs: TagInput[] = allTags.map((t) => ({
+      ...t,
+      source: "auto" as const,
+    }));
+    await upsertAndLinkTags(ctx.db, repoId, tagInputs);
   }
 
   // Assets: insert any README media we found.
@@ -226,90 +230,6 @@ async function ingestOne(
         `[discoverJob] repo_assets insert failed for ${repo.owner}/${repo.name}: ${assetErr.message}`,
       );
     }
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// Tag resolution
-// ──────────────────────────────────────────────────────────────────────
-
-interface TagRow {
-  id: string;
-  slug: string;
-  kind: "tech_stack" | "vibecoding_tool" | "feature";
-}
-
-async function insertRepoTags(
-  ctx: JobContext,
-  repoId: string,
-  tags: ExtractedTag[],
-): Promise<void> {
-  // Dedup by (slug, kind) — an extractor could emit the same slug twice.
-  const seen = new Set<string>();
-  const unique: ExtractedTag[] = [];
-  for (const t of tags) {
-    const key = `${t.kind}:${t.slug}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(t);
-  }
-  if (unique.length === 0) return;
-
-  // Batch-select existing rows by slug (citext → case-insensitive match).
-  const slugs = unique.map((t) => t.slug);
-  const { data: existing, error: selErr } = await ctx.db
-    .from("tags")
-    .select("id, slug, kind")
-    .in("slug", slugs);
-  if (selErr) throw new Error(`discoverJob: tags select failed: ${selErr.message}`);
-
-  const byKey = new Map<string, TagRow>();
-  for (const row of (existing ?? []) as TagRow[]) {
-    byKey.set(`${row.kind}:${row.slug.toLowerCase()}`, row);
-  }
-
-  // Insert any tags that are missing. Use individual upserts (rare path;
-  // only happens the first time a slug is seen).
-  const missing = unique.filter((t) => !byKey.has(`${t.kind}:${t.slug.toLowerCase()}`));
-  if (missing.length > 0) {
-    const { data: inserted, error: insErr } = await ctx.db
-      .from("tags")
-      .upsert(
-        missing.map((t) => ({ slug: t.slug, kind: t.kind, label: humanizeSlug(t.slug) })),
-        { onConflict: "slug", ignoreDuplicates: false },
-      )
-      .select("id, slug, kind");
-    if (insErr) throw new Error(`discoverJob: tags insert failed: ${insErr.message}`);
-    for (const row of (inserted ?? []) as TagRow[]) {
-      byKey.set(`${row.kind}:${row.slug.toLowerCase()}`, row);
-    }
-  }
-
-  // Build repo_tags rows, matching each ExtractedTag to its tag row.
-  const repoTagRows: Array<{
-    repo_id: string;
-    tag_id: string;
-    confidence: number;
-    source: string;
-  }> = [];
-  for (const t of unique) {
-    const row = byKey.get(`${t.kind}:${t.slug.toLowerCase()}`);
-    if (!row) continue;
-    repoTagRows.push({
-      repo_id: repoId,
-      tag_id: row.id,
-      confidence: t.confidence,
-      source: "auto",
-    });
-  }
-
-  if (repoTagRows.length === 0) return;
-
-  const { error: junctionErr } = await ctx.db
-    .from("repo_tags")
-    .upsert(repoTagRows, { onConflict: "repo_id,tag_id", ignoreDuplicates: true });
-  if (junctionErr) {
-    throw new Error(`discoverJob: repo_tags upsert failed: ${junctionErr.message}`);
   }
 }
 
@@ -347,14 +267,4 @@ async function releaseLock(ctx: JobContext): Promise<void> {
   if (error) {
     console.warn(`[discoverJob] release_pipeline_lock failed: ${error.message}`);
   }
-}
-
-function humanizeSlug(slug: string): string {
-  // e.g. "nextjs" → "Nextjs", "react-query" → "React Query".
-  // Lives here (not in a shared util) because only tag insertion needs it.
-  return slug
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((w) => w[0]?.toUpperCase() + w.slice(1))
-    .join(" ");
 }
