@@ -13,6 +13,7 @@ const envSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
   VERCEL_OIDC_TOKEN: z.string().optional(),
   CRON_SECRET: z.string().min(1),
+  RESCORE_DRAIN_MODE: z.enum(["true", "false"]).optional(),
 });
 
 export const env = envSchema.parse(process.env);
@@ -29,4 +30,5 @@ export const envScope = {
   GEMINI_API_KEY: "pipeline",
   VERCEL_OIDC_TOKEN: "both",
   CRON_SECRET: "pipeline",
+  RESCORE_DRAIN_MODE: "pipeline",
 } as const satisfies Record<keyof Env, "web" | "pipeline" | "both">;
