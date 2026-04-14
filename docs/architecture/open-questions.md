@@ -65,23 +65,15 @@
 
 ---
 
-## Q-05. Gemini scoring throughput realism
+## Q-05. Gemini scoring throughput realism — RESOLVED in sub-project #3
 
-**Status:** Deferred to sub-project #3.
+**Status:** Resolved 2026-04-14. See `docs/superpowers/specs/2026-04-14-evaluation-classification-design.md`.
 
-**Background:** Reviewer R2 flagged that PRD §4.2's economics focus is the wrong lens. The real bottleneck isn't cost ($0.05 for 2,000 repos) but:
-- Wall-clock time and retries on slow/failing calls
-- Malformed or binary READMEs that break the scoring prompt
-- Missing or broken demo URLs
-- The promised 20% manual review queue (PRD §4.3) and its tooling
-
-Foundation has one lever for this: `repo_scores` is append-only with `scoring_prompt_version` pinning, so A/B testing prompts without corrupting history is possible. Everything else is sub-project #3's problem.
-
-**Open sub-questions:**
-1. Concurrency model: N scoring workers via WDK fan-out? Global rate limit on Gemini quota?
-2. Malformed README handling: truncate at N chars? Binary fallback to metadata-only scoring? Skip and flag for manual?
-3. Manual review queue UI: where does the 20% manual review actually happen in MVP? (Admin dashboard? Spreadsheet export? Linear tickets? GitHub issues labelled `manual-review`?)
-4. Prompt version rollout: how do we deploy a new `scoring_prompt_version` — score new repos only, or re-score all? How do we compare A/B?
+**Resolutions:**
+1. **Concurrency model**: Sequential per-run with implicit GitHub token-pool rate pacing. Paid tier 1000 RPM is 2+ orders above MVP scale (20-50 repos/day). Cost kill-switch via `RequestBudget` (500 calls/run default, 2000/run for rescore).
+2. **Malformed README handling**: `has_readme=false` path → metadata-only Gemini call with `documentation_score=0`. Binary/oversized READMEs truncated at 8000 chars or sliced to target sections.
+3. **Manual review queue UI**: `status='needs_review'` enum value + `supabase/snippets/` operator queries. No dedicated UI in MVP — operators use Supabase Studio + SQL snippets.
+4. **Prompt version rollout**: `SCORING_PROMPT_VERSION` semver string in `lib/pipeline/gemini/scoring-prompt.ts`. Monthly rescore cron selects by version mismatch (priority) + 30-day staleness. `RESCORE_DRAIN_MODE` env flag switches to daily cadence for major-version migrations.
 
 **Re-open when:** Starting sub-project #3 brainstorming.
 
@@ -98,7 +90,9 @@ Foundation has one lever for this: `repo_scores` is append-only with `scoring_pr
 3. **Cost dashboard:** How do we notice if Gemini bill spikes? Pre-commit manual calculation? Vercel spend alert? Gemini API console check?
 4. **Security alerting:** RLS policy violation attempts, failed SECURITY DEFINER function calls, suspicious token_validated_at patterns — where do these land?
 
-**Re-open when:** Starting sub-project #3 brainstorming OR before first production launch, whichever comes first.
+**Update 2026-04-14:** Sub-project #3 ships `ScoreJobMetrics` TypeScript schema + 6 operator SQL snippets + `gemini_429_count` threshold documentation (0 = normal, >5 = warning, >20 = quota exhaustion). Full automated alerting still deferred — re-open before first production launch.
+
+**Re-open when:** Before first production launch.
 
 ---
 
@@ -140,3 +134,4 @@ Foundation has one lever for this: `repo_scores` is append-only with `scoring_pr
 
 - **2026-04-11** — File created during Foundation brainstorming two-reviewer pass. Seeded with Q-01 through Q-06.
 - **2026-04-14** — Sub-project #2 (ingestion) brainstorming completed. Q-04 resolved (weekly refreshJob implements mutable-data policy). Q-01 kept deferred (no Puppeteer in MVP). Added Q-07 (token pool operational policy) and Q-08 (cron route observability gap).
+- **2026-04-14** — Sub-project #3 (evaluation + classification) shipped. Q-05 resolved. Q-06 partially addressed (metrics schema + SQL snippets + 429 threshold); automated alerting still deferred. Added Issue #4 tracking for Foundation advisory-lock ineffectiveness (session-scoped over HTTP).

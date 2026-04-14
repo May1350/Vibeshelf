@@ -1,0 +1,8 @@
+{
+  "documentation": { "value": 1, "rationale": "empty readme" },
+  "code_health_readme": { "value": 1, "rationale": "no signal" },
+  "category": "other",
+  "feature_tags_canonical": [],
+  "feature_tags_novel": [],
+  "evidence_strength": "weak"
+}

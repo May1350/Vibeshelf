@@ -24,6 +24,14 @@ import remarkParse from "remark-parse";
 import { unified } from "unified";
 import { visit } from "unist-util-visit";
 
+/**
+ * Parse markdown into an mdast Root. Shared between readme-media (image walker)
+ * and readme-sections (heading-based slicing) to avoid parsing the same blob twice.
+ */
+export function parseReadme(markdown: string): Root {
+  return unified().use(remarkParse).parse(markdown) as Root;
+}
+
 export interface ExtractedMedia {
   url: string;
   kind: "readme_gif" | "readme_image";
@@ -95,8 +103,7 @@ export async function extractReadmeMedia(readmeMarkdown: string): Promise<Extrac
 
   // ── 1) mdast walk for markdown image syntax ──────────────────────────
   try {
-    const processor = unified().use(remarkParse);
-    const tree = processor.parse(readmeMarkdown) as Root;
+    const tree = parseReadme(readmeMarkdown);
     visit(tree, "image", (node: Image) => {
       if (typeof node.url === "string") push(node.url);
     });

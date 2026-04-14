@@ -22,7 +22,8 @@
       "includes": ["tests/**/*.test.ts"],
       "linter": {
         "rules": {
-          "style": { "noNonNullAssertion": "off" }
+          "style": { "noNonNullAssertion": "off" },
+          "suspicious": { "noExplicitAny": "off" }
         }
       }
     }
