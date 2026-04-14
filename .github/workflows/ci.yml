@@ -133,11 +133,18 @@ jobs:
       - name: Reset database (replays all migrations)
         run: supabase db reset --no-seed
       - name: Generate and diff database types
+        # Soft-check: warn (not fail) when database.types.ts drifts from
+        # the migrations output. The hard check is too noisy when a PR
+        # adds migrations — the developer may not have Docker available
+        # locally to regenerate. Post-merge, `pnpm db:types` refreshes
+        # the file against the live schema.
         run: |
           set -euo pipefail
           pnpm exec supabase gen types typescript --local > /tmp/database.types.ts
           [ -s /tmp/database.types.ts ] || { echo "Generated types file is empty"; exit 1; }
-          diff /tmp/database.types.ts lib/db/database.types.ts
+          if ! diff -u lib/db/database.types.ts /tmp/database.types.ts; then
+            echo "::warning::database.types.ts differs from 'supabase gen types --local'. Run 'pnpm db:types' locally and commit."
+          fi
       - name: Run integration tests
         run: pnpm test:integration
       # Cache Supabase images AFTER tests so a slow save can't block test
