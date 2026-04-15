@@ -71,9 +71,9 @@ export function FilterChips({ initial }: FilterChipsProps) {
     (key: string, value: string) => {
       const current = (params.get(key) ?? "")
         .split(",")
-        .map((t) => t.trim())
+        .map((s) => s.trim())
         .filter(Boolean);
-      const remaining = current.filter((t) => t !== value);
+      const remaining = current.filter((s) => s !== value);
       const next = new URLSearchParams(params.toString());
       if (remaining.length > 0) {
         next.set(key, remaining.join(","));

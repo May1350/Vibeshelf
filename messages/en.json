@@ -52,7 +52,6 @@
       "next": "Next",
       "label": "Pagination",
       "pageOf": "Page {current} of {total}",
-      "goToPage": "Go to page {page}",
       "goToPageOf": "Go to page {page} of {total}",
       "pagePrefix": "Page "
     }
@@ -70,7 +69,6 @@
       "heading": "Reviews",
       "placeholder": "Be the first to review this template after forking. Reviews coming soon."
     },
-    "reviewsPlaceholder": "Community showcase coming soon",
     "card": {
       "preview": "{owner}/{name} preview",
       "topFeatures": "Top features"
