@@ -1,0 +1,56 @@
+{
+  "marketplace": {
+    "title": "VibeShelf",
+    "subtitle": "바이브 코더를 위한 큐레이티드 오픈소스 템플릿",
+    "search": {
+      "placeholder": "템플릿 검색..."
+    },
+    "filters": {
+      "apply": "필터 적용",
+      "clearAll": "모두 지우기",
+      "category": "카테고리 (OR)",
+      "quality": "품질",
+      "tool": "바이브코딩 도구",
+      "tags": "기능 태그 (AND)",
+      "any": "전체",
+      "showAll": "전체 보기 ({count})"
+    },
+    "sort": {
+      "label": "정렬",
+      "score": "품질 + 별점",
+      "recent": "최근 업데이트",
+      "popular": "인기 (연령 정규화)",
+      "reviewed": "리뷰 많은 순",
+      "comingSoon": "곧 출시"
+    },
+    "grid": {
+      "found": "{count, plural, =0 {결과 없음} one {# 개의 템플릿} other {# 개의 템플릿}}",
+      "noResults": {
+        "heading": "검색 결과가 없습니다",
+        "hint": "필터를 지우거나 다른 키워드로 검색해보세요.",
+        "recommendations": "추천 템플릿"
+      }
+    },
+    "pagination": {
+      "previous": "이전",
+      "next": "다음",
+      "pageOf": "페이지 {current} / {total}",
+      "goToPage": "{page} 페이지로 이동"
+    }
+  },
+  "repo": {
+    "viewOnGithub": "GitHub에서 보기",
+    "summary": "요약",
+    "scoreBreakdown": "스코어 분석",
+    "fork": {
+      "placeholder": "이 템플릿 포크하기",
+      "signInRequired": "포크하려면 로그인 필요"
+    },
+    "reviewsPlaceholder": "커뮤니티 쇼케이스 준비 중"
+  },
+  "common": {
+    "loading": "로딩 중...",
+    "error": "오류가 발생했습니다",
+    "tryAgain": "다시 시도"
+  }
+}
