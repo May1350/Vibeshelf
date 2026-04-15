@@ -11,7 +11,24 @@
       "tool": "Vibecoding tool",
       "tags": "Features (AND)",
       "any": "Any",
-      "showAll": "Show all ({count})"
+      "showAll": "Show all ({count})",
+      "searchLabel": "Search",
+      "starsBucket": "{min}+ stars",
+      "chips": {
+        "searchLabel": "Search: {query}",
+        "categoryLabel": "Category: {value}",
+        "toolLabel": "Tool: {value}",
+        "removeSearch": "Remove Search: {query} filter",
+        "removeCategory": "Remove Category: {value} filter",
+        "removeMinScore": "Remove minimum score {value} filter",
+        "removeTool": "Remove Vibecoding: {value} filter",
+        "removeTag": "Remove tag: {value} filter"
+      },
+      "drawer": {
+        "trigger": "Filters",
+        "title": "Filters",
+        "description": "Narrow the marketplace by category, quality, tool, and tags."
+      }
     },
     "sort": {
       "label": "Sort by",
@@ -26,14 +43,18 @@
       "noResults": {
         "heading": "No matching templates",
         "hint": "Clear filters or try a different keyword.",
-        "recommendations": "Recommendations"
+        "recommendations": "Recommendations",
+        "clearAllFilters": "Clear all filters"
       }
     },
     "pagination": {
       "previous": "Previous",
       "next": "Next",
+      "label": "Pagination",
       "pageOf": "Page {current} of {total}",
-      "goToPage": "Go to page {page}"
+      "goToPage": "Go to page {page}",
+      "goToPageOf": "Go to page {page} of {total}",
+      "pagePrefix": "Page "
     }
   },
   "repo": {
@@ -42,9 +63,18 @@
     "scoreBreakdown": "Score breakdown",
     "fork": {
       "placeholder": "Fork this template",
-      "signInRequired": "Sign in to fork"
+      "signInRequired": "Sign in to fork",
+      "comingSoon": "One-click Fork available after sign-in (coming soon)."
     },
-    "reviewsPlaceholder": "Community showcase coming soon"
+    "reviews": {
+      "heading": "Reviews",
+      "placeholder": "Be the first to review this template after forking. Reviews coming soon."
+    },
+    "reviewsPlaceholder": "Community showcase coming soon",
+    "card": {
+      "preview": "{owner}/{name} preview",
+      "topFeatures": "Top features"
+    }
   },
   "common": {
     "loading": "Loading...",

@@ -1,7 +1,9 @@
 import { GitFork } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { Button } from "@/components/ui/button";
 
-export function ForkCtaPlaceholder({ githubUrl }: { githubUrl: string }) {
+export async function ForkCtaPlaceholder({ githubUrl }: { githubUrl: string }) {
+  const t = await getTranslations("repo");
   return (
     <div className="flex flex-col gap-2">
       <Button
@@ -10,13 +12,11 @@ export function ForkCtaPlaceholder({ githubUrl }: { githubUrl: string }) {
         variant="default"
         render={
           <a href={githubUrl} target="_blank" rel="noopener noreferrer">
-            <GitFork className="mr-2 h-4 w-4" /> View on GitHub
+            <GitFork className="mr-2 h-4 w-4" /> {t("viewOnGithub")}
           </a>
         }
       />
-      <p className="text-xs text-muted-foreground">
-        One-click Fork available after sign-in (coming soon).
-      </p>
+      <p className="text-xs text-muted-foreground">{t("fork.comingSoon")}</p>
     </div>
   );
 }

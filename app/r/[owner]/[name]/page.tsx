@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { JsonLd } from "@/components/repo/json-ld";
 import { RepoHero } from "@/components/repo/repo-hero";
 import { ReviewsPlaceholder } from "@/components/repo/reviews-placeholder";
@@ -29,6 +30,7 @@ export default async function RepoDetailPage(props: PageProps<"/r/[owner]/[name]
   const repo = await getRepo(owner, name);
   if (!repo) notFound(); // returns 404 status
 
+  const t = await getTranslations("repo");
   const base = env.NEXT_PUBLIC_SITE_URL ?? "https://vibeshelf.example";
   const url = `${base}/r/${owner}/${name}`;
 
@@ -51,7 +53,7 @@ export default async function RepoDetailPage(props: PageProps<"/r/[owner]/[name]
       {repo.description && (
         <section aria-labelledby="summary-heading" className="space-y-2">
           <h2 id="summary-heading" className="text-lg font-semibold">
-            Summary
+            {t("summary")}
           </h2>
           <p className="text-muted-foreground">{repo.description}</p>
         </section>

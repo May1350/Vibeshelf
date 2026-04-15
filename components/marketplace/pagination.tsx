@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
-export function Pagination({
+export async function Pagination({
   currentPage,
   totalPages,
   buildHref,
@@ -10,9 +11,10 @@ export function Pagination({
   buildHref: (page: number) => string;
 }) {
   if (totalPages <= 1) return null;
+  const t = await getTranslations("marketplace.pagination");
   const pages = pageRange(currentPage, totalPages);
   return (
-    <nav aria-label="Pagination" className="flex items-center justify-center gap-1 mt-8">
+    <nav aria-label={t("label")} className="flex items-center justify-center gap-1 mt-8">
       {pages.map((p, idx) => {
         if (p === "...") {
           return (
@@ -28,13 +30,13 @@ export function Pagination({
             key={p}
             href={buildHref(p)}
             prefetch
-            aria-label={`Go to page ${p} of ${totalPages}`}
+            aria-label={t("goToPageOf", { page: p, total: totalPages })}
             aria-current={isCurrent ? "page" : undefined}
             className={`px-3 py-1 rounded ${
               isCurrent ? "bg-primary text-primary-foreground font-semibold" : "hover:bg-muted"
             }`}
           >
-            <span className="sr-only">Page </span>
+            <span className="sr-only">{t("pagePrefix")}</span>
             {p}
           </Link>
         );

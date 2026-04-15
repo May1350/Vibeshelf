@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { EmptyState } from "@/components/marketplace/empty-state";
 import { FilterChips } from "@/components/marketplace/filter-chips";
@@ -16,13 +17,14 @@ export default async function Home(props: PageProps<"/">) {
   const sp = await props.searchParams;
   const query = parseMarketplaceParams(sp as Record<string, string | string[] | undefined>);
   const facets = await getMarketplaceFacets();
+  const t = await getTranslations("marketplace");
 
   return (
     <main className="container mx-auto px-4 py-6">
       <header className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">VibeShelf</h1>
-          <p className="text-muted-foreground">Curated open-source templates for vibe coders</p>
+          <h1 className="text-3xl font-bold tracking-tight">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
         <SortDropdown initial={query.sort} />
       </header>
@@ -42,6 +44,7 @@ export default async function Home(props: PageProps<"/">) {
 
 async function ReposSection({ query }: { query: ReturnType<typeof parseMarketplaceParams> }) {
   const { items, totalCount } = await listRepos(query);
+  const t = await getTranslations("marketplace");
 
   if (items.length === 0) {
     // Recommendations: top-scored repos when current query has no results.
@@ -67,7 +70,7 @@ async function ReposSection({ query }: { query: ReturnType<typeof parseMarketpla
   return (
     <div>
       <p className="text-sm text-muted-foreground mb-3" role="status">
-        {totalCount.toLocaleString()} template{totalCount === 1 ? "" : "s"} found
+        {t("grid.found", { count: totalCount })}
       </p>
       <RepoGrid repos={items} />
       <Pagination currentPage={query.page} totalPages={totalPages} buildHref={buildHref} />
