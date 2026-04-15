@@ -19,9 +19,15 @@
 
 ---
 
-## Q-02. MVP scope — Pro tier inclusion (PRD §10)
+## Q-02. MVP scope — Pro tier inclusion (PRD §10) — RESOLVED 2026-04-15
 
-**Status:** **Recommendation tabled 2026-04-14 — awaiting user sign-off before SP#5 brainstorming opens.** Recommendation: Option 2 (Cut Pro from MVP).
+**Decision:** **Option 2 confirmed by user 2026-04-15.** Pro tier cut from MVP. Free tier ships W4 (target 2026-05-09); Pro work begins month 3 (≈ 2026-06-15) as a separate phase under Q-03 / SP#6.
+
+SP#5 brainstorming opens with Pro-cut as a precondition, freeing Week 4 budget for: (a) production cron smoke test, (b) Q-06 observability alerting, (c) Q-09 image-reliability metric collection, (d) dogfooding before public launch.
+
+---
+
+### Original recommendation (kept for audit trail)
 
 **Burn-rate reality check (SP#4 post-merge review):**
 
@@ -170,3 +176,4 @@ PRD W4 target is 2026-05-09. SP#5 consumes the remaining budget with ~zero slack
 - **2026-04-14** — Sub-project #3 (evaluation + classification) shipped. Q-05 resolved. Q-06 partially addressed (metrics schema + SQL snippets + 429 threshold); automated alerting still deferred. Added Issue #4 tracking for Foundation advisory-lock ineffectiveness (session-scoped over HTTP).
 - **2026-04-14** — Sub-project #4 (marketplace UI free) shipped. Added Q-09 (image hot-link reliability metric → SP#4.5 mirror) and Q-10 (UI i18n scope → SP#5 trigger).
 - **2026-04-14** — SP#4 post-merge review tabled Q-02 recommendation (Option 2: cut Pro from MVP) based on updated burn-rate math. Awaiting user sign-off before SP#5 brainstorming opens.
+- **2026-04-15** — Q-02 RESOLVED. User confirmed Option 2 (Pro cut from MVP). Free tier ships W4; Pro deferred to month 3 / SP#6 under Q-03. SP#5 brainstorming opens with Pro-cut as a precondition.
