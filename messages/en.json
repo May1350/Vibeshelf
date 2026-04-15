@@ -1,0 +1,82 @@
+{
+  "marketplace": {
+    "title": "VibeShelf",
+    "subtitle": "Curated open-source templates for vibe coders",
+    "search": { "placeholder": "Search templates..." },
+    "filters": {
+      "apply": "Apply filters",
+      "clearAll": "Clear all",
+      "category": "Category (OR)",
+      "quality": "Quality",
+      "tool": "Vibecoding tool",
+      "tags": "Features (AND)",
+      "any": "Any",
+      "showAll": "Show all ({count})",
+      "searchLabel": "Search",
+      "starsBucket": "{min}+ stars",
+      "chips": {
+        "searchLabel": "Search: {query}",
+        "categoryLabel": "Category: {value}",
+        "toolLabel": "Tool: {value}",
+        "removeSearch": "Remove Search: {query} filter",
+        "removeCategory": "Remove Category: {value} filter",
+        "removeMinScore": "Remove minimum score {value} filter",
+        "removeTool": "Remove Vibecoding: {value} filter",
+        "removeTag": "Remove tag: {value} filter"
+      },
+      "drawer": {
+        "trigger": "Filters",
+        "title": "Filters",
+        "description": "Narrow the marketplace by category, quality, tool, and tags."
+      }
+    },
+    "sort": {
+      "label": "Sort by",
+      "score": "Best (quality + stars)",
+      "recent": "Recently updated",
+      "popular": "Popular (age-normalized)",
+      "reviewed": "Most Reviewed",
+      "comingSoon": "Coming soon"
+    },
+    "grid": {
+      "found": "{count, plural, =0 {No results} one {# template} other {# templates}} found",
+      "noResults": {
+        "heading": "No matching templates",
+        "hint": "Clear filters or try a different keyword.",
+        "recommendations": "Recommendations",
+        "clearAllFilters": "Clear all filters"
+      }
+    },
+    "pagination": {
+      "previous": "Previous",
+      "next": "Next",
+      "label": "Pagination",
+      "pageOf": "Page {current} of {total}",
+      "goToPageOf": "Go to page {page} of {total}",
+      "pagePrefix": "Page "
+    }
+  },
+  "repo": {
+    "viewOnGithub": "View on GitHub",
+    "summary": "Summary",
+    "scoreBreakdown": "Score breakdown",
+    "fork": {
+      "placeholder": "Fork this template",
+      "signInRequired": "Sign in to fork",
+      "comingSoon": "One-click Fork available after sign-in (coming soon)."
+    },
+    "reviews": {
+      "heading": "Reviews",
+      "placeholder": "Be the first to review this template after forking. Reviews coming soon."
+    },
+    "card": {
+      "preview": "{owner}/{name} preview",
+      "topFeatures": "Top features"
+    }
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "tryAgain": "Try again"
+  }
+}

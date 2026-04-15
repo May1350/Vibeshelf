@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useRef } from "react";
 import { useDebouncedCallback } from "@/lib/marketplace/debounce";
 import type { MarketplaceFacets } from "@/lib/marketplace/facets";
@@ -39,6 +40,8 @@ interface FilterSidebarProps {
  * - `w-72` minimum width is expansion-safe for Korean labels (Real R2.R4).
  */
 export function FilterSidebar({ initial, facets, className }: FilterSidebarProps) {
+  const t = useTranslations("marketplace.filters");
+  const tSearch = useTranslations("marketplace.search");
   const formRef = useRef<HTMLFormElement>(null);
 
   const submit = () => formRef.current?.requestSubmit();
@@ -58,14 +61,14 @@ export function FilterSidebar({ initial, facets, className }: FilterSidebarProps
         {/* Search */}
         <div>
           <label htmlFor="q" className="text-sm font-medium">
-            Search
+            {t("searchLabel")}
           </label>
           <input
             id="q"
             type="search"
             name="q"
             defaultValue={initial.q ?? ""}
-            placeholder="Search templates..."
+            placeholder={tSearch("placeholder")}
             onChange={debouncedSubmit}
             className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           />
@@ -73,7 +76,7 @@ export function FilterSidebar({ initial, facets, className }: FilterSidebarProps
 
         {/* Category — multi-select checkboxes, OR semantics */}
         <fieldset className="space-y-1">
-          <legend className="text-sm font-medium">Category (OR)</legend>
+          <legend className="text-sm font-medium">{t("category")}</legend>
           {CATEGORIES.map((c) => (
             <label key={c} className="flex items-center gap-2 text-sm">
               <input
@@ -91,7 +94,7 @@ export function FilterSidebar({ initial, facets, className }: FilterSidebarProps
 
         {/* Quality */}
         <fieldset className="space-y-1">
-          <legend className="text-sm font-medium">Quality</legend>
+          <legend className="text-sm font-medium">{t("quality")}</legend>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="radio"
@@ -100,7 +103,7 @@ export function FilterSidebar({ initial, facets, className }: FilterSidebarProps
               defaultChecked={!initial.min_score}
               onChange={batchedSubmit}
             />
-            Any
+            {t("any")}
           </label>
           {SCORE_BUCKETS.map(({ min, key }) => (
             <label key={min} className="flex items-center gap-2 text-sm">
@@ -111,7 +114,7 @@ export function FilterSidebar({ initial, facets, className }: FilterSidebarProps
                 defaultChecked={initial.min_score === min}
                 onChange={batchedSubmit}
               />
-              <span>{min}+ stars</span>
+              <span>{t("starsBucket", { min })}</span>
               <span className="text-xs text-muted-foreground">
                 ({facets.score_buckets[key] ?? 0})
               </span>
@@ -121,7 +124,7 @@ export function FilterSidebar({ initial, facets, className }: FilterSidebarProps
 
         {/* Vibecoding tool */}
         <fieldset className="space-y-1">
-          <legend className="text-sm font-medium">Vibecoding tool</legend>
+          <legend className="text-sm font-medium">{t("tool")}</legend>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="radio"
@@ -130,7 +133,7 @@ export function FilterSidebar({ initial, facets, className }: FilterSidebarProps
               defaultChecked={!initial.vibecoding}
               onChange={batchedSubmit}
             />
-            Any
+            {t("any")}
           </label>
           {VIBECODING_TOOLS.map((v) => (
             <label key={v} className="flex items-center gap-2 text-sm">
@@ -149,37 +152,37 @@ export function FilterSidebar({ initial, facets, className }: FilterSidebarProps
 
         {/* Feature tags — top-10 visible + <details> overflow, AND semantics */}
         <fieldset className="space-y-1">
-          <legend className="text-sm font-medium">Features (AND)</legend>
-          {facets.tags.slice(0, 10).map((t) => (
-            <label key={t.slug} className="flex items-center gap-2 text-sm">
+          <legend className="text-sm font-medium">{t("tags")}</legend>
+          {facets.tags.slice(0, 10).map((tag) => (
+            <label key={tag.slug} className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 name="tags"
-                value={t.slug}
-                defaultChecked={initial.tags.includes(t.slug)}
+                value={tag.slug}
+                defaultChecked={initial.tags.includes(tag.slug)}
                 onChange={batchedSubmit}
               />
-              <span>{t.label}</span>
-              <span className="text-xs text-muted-foreground">({t.count})</span>
+              <span>{tag.label}</span>
+              <span className="text-xs text-muted-foreground">({tag.count})</span>
             </label>
           ))}
           {hiddenTags.length > 0 && (
             <details className="mt-2">
               <summary className="cursor-pointer py-1 text-sm text-muted-foreground">
-                Show all ({hiddenTags.length})
+                {t("showAll", { count: hiddenTags.length })}
               </summary>
               <div className="mt-1 space-y-1">
-                {hiddenTags.map((t) => (
-                  <label key={t.slug} className="flex items-center gap-2 text-sm">
+                {hiddenTags.map((tag) => (
+                  <label key={tag.slug} className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       name="tags"
-                      value={t.slug}
-                      defaultChecked={initial.tags.includes(t.slug)}
+                      value={tag.slug}
+                      defaultChecked={initial.tags.includes(tag.slug)}
                       onChange={batchedSubmit}
                     />
-                    <span>{t.label}</span>
-                    <span className="text-xs text-muted-foreground">({t.count})</span>
+                    <span>{tag.label}</span>
+                    <span className="text-xs text-muted-foreground">({tag.count})</span>
                   </label>
                 ))}
               </div>
@@ -197,7 +200,7 @@ export function FilterSidebar({ initial, facets, className }: FilterSidebarProps
           type="submit"
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-muted"
         >
-          Apply filters
+          {t("apply")}
         </button>
       </form>
     </aside>

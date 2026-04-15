@@ -2,6 +2,7 @@
 
 import { XIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useCallback } from "react";
 import type { MarketplaceQuery } from "@/lib/marketplace/search-params";
 
@@ -42,6 +43,7 @@ function Chip({ children, ariaLabel, onRemove }: ChipProps) {
  * the soft-nav experience. Page resets to 1 on any filter change.
  */
 export function FilterChips({ initial }: FilterChipsProps) {
+  const t = useTranslations("marketplace.filters");
   const router = useRouter();
   const params = useSearchParams();
 
@@ -69,9 +71,9 @@ export function FilterChips({ initial }: FilterChipsProps) {
     (key: string, value: string) => {
       const current = (params.get(key) ?? "")
         .split(",")
-        .map((t) => t.trim())
+        .map((s) => s.trim())
         .filter(Boolean);
-      const remaining = current.filter((t) => t !== value);
+      const remaining = current.filter((s) => s !== value);
       const next = new URLSearchParams(params.toString());
       if (remaining.length > 0) {
         next.set(key, remaining.join(","));
@@ -95,42 +97,45 @@ export function FilterChips({ initial }: FilterChipsProps) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
       {initial.q && (
-        <Chip ariaLabel={`Remove Search: ${initial.q} filter`} onRemove={() => removeKey("q")}>
-          Search: {initial.q}
+        <Chip
+          ariaLabel={t("chips.removeSearch", { query: initial.q })}
+          onRemove={() => removeKey("q")}
+        >
+          {t("chips.searchLabel", { query: initial.q })}
         </Chip>
       )}
       {initial.categories.map((c) => (
         <Chip
           key={c}
-          ariaLabel={`Remove Category: ${c} filter`}
+          ariaLabel={t("chips.removeCategory", { value: c })}
           onRemove={() => removeFromCsv("categories", c)}
         >
-          Category: {c}
+          {t("chips.categoryLabel", { value: c })}
         </Chip>
       ))}
       {typeof initial.min_score === "number" && (
         <Chip
-          ariaLabel={`Remove minimum score ${initial.min_score} filter`}
+          ariaLabel={t("chips.removeMinScore", { value: initial.min_score })}
           onRemove={() => removeKey("min_score")}
         >
-          {initial.min_score}+ stars
+          {t("starsBucket", { min: initial.min_score })}
         </Chip>
       )}
       {initial.vibecoding && (
         <Chip
-          ariaLabel={`Remove Vibecoding: ${initial.vibecoding} filter`}
+          ariaLabel={t("chips.removeTool", { value: initial.vibecoding })}
           onRemove={() => removeKey("vibecoding")}
         >
-          Tool: {initial.vibecoding}
+          {t("chips.toolLabel", { value: initial.vibecoding })}
         </Chip>
       )}
-      {initial.tags.map((t) => (
+      {initial.tags.map((tag) => (
         <Chip
-          key={t}
-          ariaLabel={`Remove tag: ${t} filter`}
-          onRemove={() => removeFromCsv("tags", t)}
+          key={tag}
+          ariaLabel={t("chips.removeTag", { value: tag })}
+          onRemove={() => removeFromCsv("tags", tag)}
         >
-          {t}
+          {tag}
         </Chip>
       ))}
       <button
@@ -138,7 +143,7 @@ export function FilterChips({ initial }: FilterChipsProps) {
         onClick={() => router.push("/")}
         className="ml-1 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
       >
-        Clear all
+        {t("clearAll")}
       </button>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { Filter } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ function countActiveFilters(initial: MarketplaceQuery): number {
  * and a Badge shows the active filter count.
  */
 export function FilterDrawer({ initial, facets }: FilterDrawerProps) {
+  const t = useTranslations("marketplace.filters.drawer");
   const [open, setOpen] = useState(false);
   const activeCount = countActiveFilters(initial);
 
@@ -53,7 +55,7 @@ export function FilterDrawer({ initial, facets }: FilterDrawerProps) {
             aria-expanded={open ? "true" : "false"}
           >
             <Filter aria-hidden="true" />
-            <span>Filters</span>
+            <span>{t("trigger")}</span>
             {activeCount > 0 && (
               <Badge variant="secondary" className="ml-1">
                 {activeCount}
@@ -64,10 +66,8 @@ export function FilterDrawer({ initial, facets }: FilterDrawerProps) {
       />
       <SheetContent side="bottom" className="h-[80vh] overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Filters</SheetTitle>
-          <SheetDescription>
-            Narrow the marketplace by category, quality, tool, and tags.
-          </SheetDescription>
+          <SheetTitle>{t("title")}</SheetTitle>
+          <SheetDescription>{t("description")}</SheetDescription>
         </SheetHeader>
         <div className="px-4 pb-6">
           <FilterSidebar initial={initial} facets={facets} className="w-full" />

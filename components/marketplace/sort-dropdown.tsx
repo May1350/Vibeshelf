@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -24,6 +25,7 @@ interface SortDropdownProps {
  * once the reviews subsystem lands.
  */
 export function SortDropdown({ initial }: SortDropdownProps) {
+  const t = useTranslations("marketplace.sort");
   const router = useRouter();
   const params = useSearchParams();
 
@@ -37,17 +39,17 @@ export function SortDropdown({ initial }: SortDropdownProps) {
 
   return (
     <Select value={initial} onValueChange={onChange}>
-      <SelectTrigger className="w-56" aria-label="Sort by">
+      <SelectTrigger className="w-56" aria-label={t("label")}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="score">Best (quality + stars)</SelectItem>
-        <SelectItem value="recent">Recently updated</SelectItem>
-        <SelectItem value="popular">Popular (age-normalized)</SelectItem>
+        <SelectItem value="score">{t("score")}</SelectItem>
+        <SelectItem value="recent">{t("recent")}</SelectItem>
+        <SelectItem value="popular">{t("popular")}</SelectItem>
         <SelectItem value="reviewed" disabled>
-          <span>Most Reviewed</span>
+          <span>{t("reviewed")}</span>
           <Badge variant="secondary" className="ml-2">
-            Coming soon
+            {t("comingSoon")}
           </Badge>
         </SelectItem>
       </SelectContent>

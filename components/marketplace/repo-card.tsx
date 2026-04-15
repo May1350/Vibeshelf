@@ -1,5 +1,8 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { ScoreBadge } from "@/components/repo/score-badge";
 import { Badge } from "@/components/ui/badge";
 import type { MarketplaceRepoRow } from "@/lib/marketplace/queries";
@@ -11,6 +14,7 @@ export function RepoCard({
   repo: MarketplaceRepoRow;
   isAboveFold: boolean;
 }) {
+  const t = useTranslations("repo.card");
   const href = `/r/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}`;
   const heroUrl = repo.hero_asset?.external_url ?? null;
   return (
@@ -19,7 +23,7 @@ export function RepoCard({
         {heroUrl ? (
           <Image
             src={heroUrl}
-            alt={`${repo.owner}/${repo.name} preview`}
+            alt={t("preview", { owner: repo.owner, name: repo.name })}
             width={400}
             height={300}
             unoptimized={repo.hero_asset?.kind === "readme_gif"}
@@ -43,7 +47,7 @@ export function RepoCard({
             <span className="text-muted-foreground">⭐ {formatStars(repo.stars)}</span>
           </div>
           {repo.feature_tags.length > 0 && (
-            <ul className="flex flex-wrap gap-1" aria-label="Top features">
+            <ul className="flex flex-wrap gap-1" aria-label={t("topFeatures")}>
               {repo.feature_tags.slice(0, 3).map((slug) => (
                 <li key={slug}>
                   <Badge variant="secondary">{slug}</Badge>
