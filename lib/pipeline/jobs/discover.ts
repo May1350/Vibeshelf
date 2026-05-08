@@ -41,6 +41,17 @@ const PUSHED_AFTER_MS = 180 * 24 * 60 * 60 * 1000;
 
 export interface DiscoverInput {
   readonly maxQueries?: number;
+  /**
+   * Pagination cap per search query. Default is unlimited within
+   * GitHub's 1000-result ceiling. Lower this for smoke runs.
+   */
+  readonly maxPagesPerQuery?: number;
+  /**
+   * Skip the pg_advisory_lock gate. Workaround for stuck locks
+   * caused by Supavisor transaction-pool mode + session-scoped
+   * pg_advisory_lock interaction. Manual smoke runs only.
+   */
+  readonly bypassLock?: boolean;
 }
 
 export interface DiscoverOutput {
@@ -68,7 +79,7 @@ export async function discoverJob(
 ): Promise<DiscoverOutput> {
   const maxQueries = input.maxQueries ?? DEFAULT_MAX_QUERIES;
 
-  const lock = await acquireLock(ctx);
+  const lock = input.bypassLock ? true : await acquireLock(ctx);
   if (!lock) {
     ctx.metric("lock_skipped", 1);
     return {
@@ -92,7 +103,10 @@ export async function discoverJob(
     const collected = new Map<number, SearchResultRepo>();
     let queriesExecuted = 0;
     for (const q of queries) {
-      const results = await executeSearch(ctx.db, q, { maxPages: 10, perPage: 100 });
+      const results = await executeSearch(ctx.db, q, {
+        maxPages: input.maxPagesPerQuery ?? 10,
+        perPage: 100,
+      });
       for (const r of results) {
         if (!collected.has(r.github_id)) collected.set(r.github_id, r);
       }
