@@ -1,4 +1,6 @@
+import { getTranslations } from "next-intl/server";
 import { Badge } from "@/components/ui/badge";
+import { tagLabel, vibecodingLabel } from "@/lib/marketplace/labels";
 
 interface TagsByKind {
   feature: string[];
@@ -6,29 +8,33 @@ interface TagsByKind {
   vibecoding_tool: string[];
 }
 
-const KIND_LABELS: Record<keyof TagsByKind, string> = {
-  feature: "Features",
-  tech_stack: "Tech Stack",
-  vibecoding_tool: "Vibecoding Tools",
-};
+const KINDS: Array<keyof TagsByKind> = ["feature", "tech_stack", "vibecoding_tool"];
 
-export function TagsList({ tags }: { tags: TagsByKind }) {
-  const sections = (Object.keys(KIND_LABELS) as Array<keyof TagsByKind>).filter(
-    (kind) => tags[kind].length > 0,
-  );
+function labelFor(kind: keyof TagsByKind, slug: string): string {
+  if (kind === "vibecoding_tool") return vibecodingLabel(slug);
+  // Tech-stack slugs (react, typescript, …) get the same dictionary path as
+  // feature tags. tagLabel() falls back to humanize for unknown slugs, which
+  // produces "React"/"Vite" but mis-cases brands like "TypeScript". Acceptable
+  // until we add a tech-stack dictionary.
+  return tagLabel(slug);
+}
+
+export async function TagsList({ tags }: { tags: TagsByKind }) {
+  const t = await getTranslations("repo.tagsList");
+  const sections = KINDS.filter((kind) => tags[kind].length > 0);
   if (sections.length === 0) return null;
   return (
     <section aria-labelledby="tags-heading" className="space-y-3">
       <h2 id="tags-heading" className="text-lg font-semibold">
-        Tags
+        {t("heading")}
       </h2>
       {sections.map((kind) => (
         <div key={kind}>
-          <h3 className="text-sm text-muted-foreground mb-1">{KIND_LABELS[kind]}</h3>
+          <h3 className="text-sm text-muted-foreground mb-1">{t(`kinds.${kind}`)}</h3>
           <ul className="flex flex-wrap gap-1">
             {tags[kind].map((slug) => (
               <li key={slug}>
-                <Badge variant="secondary">{slug}</Badge>
+                <Badge variant="secondary">{labelFor(kind, slug)}</Badge>
               </li>
             ))}
           </ul>

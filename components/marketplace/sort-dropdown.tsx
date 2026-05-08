@@ -40,7 +40,13 @@ export function SortDropdown({ initial }: SortDropdownProps) {
   return (
     <Select value={initial} onValueChange={onChange}>
       <SelectTrigger className="w-56" aria-label={t("label")}>
-        <SelectValue />
+        {/*
+          Base UI's Select.Value defaults to the raw `value` attribute when
+          SelectItem children include nodes (badge wrapper on "reviewed").
+          Render the localized label explicitly so the trigger never shows
+          "score" / "recent" / "popular".
+        */}
+        <SelectValue>{(value) => t(value as MarketplaceQuery["sort"])}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="score">{t("score")}</SelectItem>
