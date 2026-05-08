@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { HeroImage } from "@/components/repo/hero-image";
 import { ScoreBadge } from "@/components/repo/score-badge";
 import { Badge } from "@/components/ui/badge";
 import { tagLabel } from "@/lib/marketplace/labels";
@@ -21,23 +21,14 @@ export function RepoCard({
   return (
     <article className="relative group rounded-lg overflow-hidden border bg-card hover:shadow-md transition-shadow">
       <Link href={href} className="block focus:outline focus:outline-2 focus:outline-ring">
-        {heroUrl ? (
-          <Image
-            src={heroUrl}
-            alt={t("preview", { owner: repo.owner, name: repo.name })}
-            width={400}
-            height={300}
-            unoptimized={repo.hero_asset?.kind === "readme_gif"}
-            loading={isAboveFold ? "eager" : "lazy"}
-            fetchPriority={isAboveFold ? "auto" : "low"}
-            className="w-full h-auto bg-muted"
-          />
-        ) : (
-          <div
-            className="aspect-[4/3] bg-gradient-to-br from-muted to-muted/50"
-            aria-hidden="true"
-          />
-        )}
+        <HeroImage
+          src={heroUrl}
+          alt={t("preview", { owner: repo.owner, name: repo.name })}
+          isAboveFold={isAboveFold}
+          unoptimized={repo.hero_asset?.kind === "readme_gif"}
+          aspectClass="aspect-[4/3]"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+        />
         <div className="p-3 space-y-2">
           <h3 className="font-medium line-clamp-2">
             <span className="text-muted-foreground font-normal">{repo.owner}/</span>

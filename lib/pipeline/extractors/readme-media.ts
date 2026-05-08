@@ -58,16 +58,26 @@ const BADGE_HOSTS: readonly string[] = [
   "app.travis-ci.com",
   "deepsource.io",
   "snyk.io",
+  // Contributors widget — renders a strip of avatars, never a hero image.
+  "contrib.rocks",
+  // jsdelivr stats badges (e.g. data.jsdelivr.com/v1/stats/...) — picked up
+  // as a hero by the first-seen heuristic on packages with a stats line near
+  // the README top.
+  "data.jsdelivr.com",
 ];
 
 // Path patterns that look like badges regardless of host — notably
 // GitHub-hosted workflow status badges like
-// `github.com/owner/repo/actions/workflows/ci.yml/badge.svg`.
+// `github.com/owner/repo/actions/workflows/ci.yml/badge.svg`. Also covers
+// PaaS deploy buttons (vercel.com/button, herokucdn /deploy/button.svg,
+// netlify /deploy/button.svg) which are 1-line CTAs, not previews.
 const BADGE_PATH_PATTERNS: readonly RegExp[] = [
   /\/badge\.svg(\?.*)?$/i,
   /\/badges\//i,
   /\/actions\/workflows\/.+\/badge\.svg/i,
   /\/workflow\/badge/i,
+  /^\/button(\.svg)?\/?$/i,
+  /\/deploy[-_/]button(\.svg)?$/i,
 ];
 
 // Matches `<img ... src="..." ...>` and `<img ... src='...' ...>` —

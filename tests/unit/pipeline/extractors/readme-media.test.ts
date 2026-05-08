@@ -75,6 +75,29 @@ describe("extractReadmeMedia", () => {
     expect(await extractReadmeMedia(md)).toEqual([]);
   });
 
+  it("filters out the Vercel deploy button (vercel.com/button)", async () => {
+    const md = "[![Deploy](https://vercel.com/button)](https://vercel.com/import)";
+    expect(await extractReadmeMedia(md)).toEqual([]);
+  });
+
+  it("filters out herokucdn / netlify deploy-button assets", async () => {
+    const md = [
+      "![Heroku](https://www.herokucdn.com/deploy/button.svg)",
+      "![Netlify](https://www.netlify.com/img/deploy/button.svg)",
+    ].join("\n");
+    expect(await extractReadmeMedia(md)).toEqual([]);
+  });
+
+  it("filters out contrib.rocks contributor strip", async () => {
+    const md = "![contributors](https://contrib.rocks/image?repo=owner/repo)";
+    expect(await extractReadmeMedia(md)).toEqual([]);
+  });
+
+  it("filters out jsdelivr stats badges", async () => {
+    const md = "![stats](https://data.jsdelivr.com/v1/stats/packages/npm/foo/badge?style=rounded)";
+    expect(await extractReadmeMedia(md)).toEqual([]);
+  });
+
   it("filters out relative markdown URLs (docs/screenshot.png)", async () => {
     const md = "![screenshot](docs/screenshot.png)";
     expect(await extractReadmeMedia(md)).toEqual([]);
