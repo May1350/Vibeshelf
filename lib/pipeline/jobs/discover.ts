@@ -46,12 +46,6 @@ export interface DiscoverInput {
    * GitHub's 1000-result ceiling. Lower this for smoke runs.
    */
   readonly maxPagesPerQuery?: number;
-  /**
-   * Skip the pg_advisory_lock gate. Workaround for stuck locks
-   * caused by Supavisor transaction-pool mode + session-scoped
-   * pg_advisory_lock interaction. Manual smoke runs only.
-   */
-  readonly bypassLock?: boolean;
 }
 
 export interface DiscoverOutput {
@@ -79,7 +73,7 @@ export async function discoverJob(
 ): Promise<DiscoverOutput> {
   const maxQueries = input.maxQueries ?? DEFAULT_MAX_QUERIES;
 
-  const lock = input.bypassLock ? true : await acquireLock(ctx);
+  const lock = await acquireLock(ctx);
   if (!lock) {
     ctx.metric("lock_skipped", 1);
     return {

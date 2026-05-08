@@ -30,7 +30,7 @@ export async function rpcAcquirePipelineLock(
   lockKey: string,
 ): Promise<RpcResult<boolean | null>> {
   // biome-ignore lint/suspicious/noExplicitAny: RPC type regen pending (Docker required)
-  return (db.rpc as any)("acquire_pipeline_lock", { lock_key: lockKey });
+  return (db.rpc as any)("acquire_pipeline_lock", { p_lock_key: lockKey });
 }
 
 export async function rpcReleasePipelineLock(
@@ -38,7 +38,7 @@ export async function rpcReleasePipelineLock(
   lockKey: string,
 ): Promise<RpcResult<boolean | null>> {
   // biome-ignore lint/suspicious/noExplicitAny: RPC type regen pending (Docker required)
-  return (db.rpc as any)("release_pipeline_lock", { lock_key: lockKey });
+  return (db.rpc as any)("release_pipeline_lock", { p_lock_key: lockKey });
 }
 
 export async function rpcAcquireGithubToken(
