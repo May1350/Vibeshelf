@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { licenseLabel } from "@/lib/marketplace/labels";
 import type { RepoDetail } from "@/lib/marketplace/queries";
 import { ForkCtaPlaceholder } from "./fork-cta-placeholder";
 
@@ -26,7 +27,7 @@ export function RepoHero({ repo }: { repo: RepoDetail }) {
         {repo.description && <p className="text-muted-foreground">{repo.description}</p>}
         <dl className="grid grid-cols-2 gap-2 text-sm">
           <dt className="text-muted-foreground">License</dt>
-          <dd className="font-mono">{repo.license}</dd>
+          <dd className="font-mono">{licenseLabel(repo.license)}</dd>
           <dt className="text-muted-foreground">Stars</dt>
           <dd>{repo.stars.toLocaleString()}</dd>
           <dt className="text-muted-foreground">Forks</dt>
