@@ -54,6 +54,7 @@
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.4",
     "dependency-cruiser": "^17.3.10",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
     "jsonwebtoken": "^9.0.3",

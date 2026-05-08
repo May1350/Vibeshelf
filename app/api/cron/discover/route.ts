@@ -36,11 +36,9 @@ export async function GET(req: Request): Promise<Response> {
   const maxPagesParam = url.searchParams.get("maxPagesPerQuery");
   const maxQueries = maxQueriesParam ? Number.parseInt(maxQueriesParam, 10) : undefined;
   const maxPages = maxPagesParam ? Number.parseInt(maxPagesParam, 10) : undefined;
-  const bypassLock = url.searchParams.get("bypassLock") === "1";
-  const input: { maxQueries?: number; maxPagesPerQuery?: number; bypassLock?: boolean } = {};
+  const input: { maxQueries?: number; maxPagesPerQuery?: number } = {};
   if (Number.isFinite(maxQueries) && (maxQueries as number) > 0) input.maxQueries = maxQueries;
   if (Number.isFinite(maxPages) && (maxPages as number) > 0) input.maxPagesPerQuery = maxPages;
-  if (bypassLock) input.bypassLock = true;
 
   // Contract: response body is DiscoverOutput (counts + lock_acquired).
   // DO NOT add sensitive data (tokens, raw errors, repo lists) to the
