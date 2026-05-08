@@ -147,7 +147,7 @@ describe("get_my_oauth_token_encrypted", () => {
   });
 
   it("raises P0002 when token is revoked", async () => {
-    const { userId, client } = await createTestUser();
+    const { client } = await createTestUser();
     const dummyToken = encryptToken("ghp_test_revoked", 1);
 
     // Upsert a token
@@ -357,12 +357,9 @@ describe("create_review_with_fork_check", () => {
   });
 
   it("rejects non-published repo", async () => {
-    const { client } = await createTestUser();
     const repo = await createRepo("pending");
 
     // Create fork via service (bypass the function's published check for fork)
-    const { userId } = await createTestUser();
-    // We need the actual user, let's redo
     const user = await createTestUser();
 
     // Insert fork via service to bypass record_fork_event's published check

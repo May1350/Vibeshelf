@@ -102,12 +102,6 @@ describe("storage cleanup trigger", () => {
 
   // Verify the trigger function exists at the DB level (does not require storage service)
   it("cleanup trigger function exists in the database", async () => {
-    const { data, error } = await svc.rpc("get_my_oauth_token_encrypted").then(
-      () => ({ data: null, error: null }),
-      () => ({ data: null, error: null }),
-    );
-
-    // Query pg_proc to verify the function exists
     const result = await svc.from("review_assets").select("id").limit(0);
 
     // If we can query review_assets, the table and its triggers exist.

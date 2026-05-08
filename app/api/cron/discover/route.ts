@@ -27,10 +27,23 @@ export async function GET(req: Request): Promise<Response> {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  // Optional ?maxQueries=N&maxPagesPerQuery=M override for controlled
+  // smoke runs (dev/manual). Vercel cron always GETs without query
+  // params, so the production daily schedule still hits the
+  // discoverJob defaults.
+  const url = new URL(req.url);
+  const maxQueriesParam = url.searchParams.get("maxQueries");
+  const maxPagesParam = url.searchParams.get("maxPagesPerQuery");
+  const maxQueries = maxQueriesParam ? Number.parseInt(maxQueriesParam, 10) : undefined;
+  const maxPages = maxPagesParam ? Number.parseInt(maxPagesParam, 10) : undefined;
+  const input: { maxQueries?: number; maxPagesPerQuery?: number } = {};
+  if (Number.isFinite(maxQueries) && (maxQueries as number) > 0) input.maxQueries = maxQueries;
+  if (Number.isFinite(maxPages) && (maxPages as number) > 0) input.maxPagesPerQuery = maxPages;
+
   // Contract: response body is DiscoverOutput (counts + lock_acquired).
   // DO NOT add sensitive data (tokens, raw errors, repo lists) to the
   // output type — cron runs show up in Vercel's function logs.
-  const result = await runJob("ingest-discover", {}, (ctx) => discoverJob(ctx));
+  const result = await runJob("ingest-discover", input, (ctx) => discoverJob(ctx, input));
 
   // Invalidate cache tags for changed repos. revalidateTag(tag, profile)
   // form — single-arg overload deprecated in Next 16 (Critical R1.C1).

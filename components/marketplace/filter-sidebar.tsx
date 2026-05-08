@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useRef } from "react";
 import { useDebouncedCallback } from "@/lib/marketplace/debounce";
 import type { MarketplaceFacets } from "@/lib/marketplace/facets";
+import { categoryLabel, tagLabel, vibecodingLabel } from "@/lib/marketplace/labels";
 import type { MarketplaceQuery } from "@/lib/marketplace/search-params";
 import { CATEGORIES, VIBECODING_TOOLS } from "@/lib/marketplace/search-params";
 
@@ -12,13 +13,6 @@ const SCORE_BUCKETS: Array<{ min: number; key: keyof MarketplaceFacets["score_bu
   { min: 4, key: "min_4" },
   { min: 4.5, key: "min_4_5" },
 ];
-
-function humanize(slug: string): string {
-  return slug
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
 
 interface FilterSidebarProps {
   initial: MarketplaceQuery;
@@ -86,7 +80,7 @@ export function FilterSidebar({ initial, facets, className }: FilterSidebarProps
                 defaultChecked={initial.categories.includes(c)}
                 onChange={batchedSubmit}
               />
-              <span>{humanize(c)}</span>
+              <span>{categoryLabel(c)}</span>
               <span className="text-xs text-muted-foreground">({facets.categories[c] ?? 0})</span>
             </label>
           ))}
@@ -144,7 +138,7 @@ export function FilterSidebar({ initial, facets, className }: FilterSidebarProps
                 defaultChecked={initial.vibecoding === v}
                 onChange={batchedSubmit}
               />
-              <span className="capitalize">{v}</span>
+              <span>{vibecodingLabel(v)}</span>
               <span className="text-xs text-muted-foreground">({facets.vibecoding[v] ?? 0})</span>
             </label>
           ))}
@@ -162,7 +156,7 @@ export function FilterSidebar({ initial, facets, className }: FilterSidebarProps
                 defaultChecked={initial.tags.includes(tag.slug)}
                 onChange={batchedSubmit}
               />
-              <span>{tag.label}</span>
+              <span>{tagLabel(tag.slug)}</span>
               <span className="text-xs text-muted-foreground">({tag.count})</span>
             </label>
           ))}
@@ -181,7 +175,7 @@ export function FilterSidebar({ initial, facets, className }: FilterSidebarProps
                       defaultChecked={initial.tags.includes(tag.slug)}
                       onChange={batchedSubmit}
                     />
-                    <span>{tag.label}</span>
+                    <span>{tagLabel(tag.slug)}</span>
                     <span className="text-xs text-muted-foreground">({tag.count})</span>
                   </label>
                 ))}

@@ -41,6 +41,11 @@ const PUSHED_AFTER_MS = 180 * 24 * 60 * 60 * 1000;
 
 export interface DiscoverInput {
   readonly maxQueries?: number;
+  /**
+   * Pagination cap per search query. Default is unlimited within
+   * GitHub's 1000-result ceiling. Lower this for smoke runs.
+   */
+  readonly maxPagesPerQuery?: number;
 }
 
 export interface DiscoverOutput {
@@ -92,7 +97,10 @@ export async function discoverJob(
     const collected = new Map<number, SearchResultRepo>();
     let queriesExecuted = 0;
     for (const q of queries) {
-      const results = await executeSearch(ctx.db, q, { maxPages: 10, perPage: 100 });
+      const results = await executeSearch(ctx.db, q, {
+        maxPages: input.maxPagesPerQuery ?? 10,
+        perPage: 100,
+      });
       for (const r of results) {
         if (!collected.has(r.github_id)) collected.set(r.github_id, r);
       }

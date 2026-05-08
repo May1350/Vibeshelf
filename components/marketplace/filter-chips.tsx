@@ -4,6 +4,7 @@ import { XIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback } from "react";
+import { categoryLabel, tagLabel, vibecodingLabel } from "@/lib/marketplace/labels";
 import type { MarketplaceQuery } from "@/lib/marketplace/search-params";
 
 interface FilterChipsProps {
@@ -107,10 +108,10 @@ export function FilterChips({ initial }: FilterChipsProps) {
       {initial.categories.map((c) => (
         <Chip
           key={c}
-          ariaLabel={t("chips.removeCategory", { value: c })}
+          ariaLabel={t("chips.removeCategory", { value: categoryLabel(c) })}
           onRemove={() => removeFromCsv("categories", c)}
         >
-          {t("chips.categoryLabel", { value: c })}
+          {t("chips.categoryLabel", { value: categoryLabel(c) })}
         </Chip>
       ))}
       {typeof initial.min_score === "number" && (
@@ -123,19 +124,19 @@ export function FilterChips({ initial }: FilterChipsProps) {
       )}
       {initial.vibecoding && (
         <Chip
-          ariaLabel={t("chips.removeTool", { value: initial.vibecoding })}
+          ariaLabel={t("chips.removeTool", { value: vibecodingLabel(initial.vibecoding) })}
           onRemove={() => removeKey("vibecoding")}
         >
-          {t("chips.toolLabel", { value: initial.vibecoding })}
+          {t("chips.toolLabel", { value: vibecodingLabel(initial.vibecoding) })}
         </Chip>
       )}
       {initial.tags.map((tag) => (
         <Chip
           key={tag}
-          ariaLabel={t("chips.removeTag", { value: tag })}
+          ariaLabel={t("chips.removeTag", { value: tagLabel(tag) })}
           onRemove={() => removeFromCsv("tags", tag)}
         >
-          {tag}
+          {tagLabel(tag)}
         </Chip>
       ))}
       <button
