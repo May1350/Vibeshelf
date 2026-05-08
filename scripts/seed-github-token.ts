@@ -9,6 +9,7 @@
 // at module load time and fail in script context).
 
 import { config } from "dotenv";
+
 config({ path: ".env.local" });
 
 import { createCipheriv, randomBytes } from "node:crypto";
