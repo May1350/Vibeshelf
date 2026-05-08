@@ -18,6 +18,7 @@ export async function EmptyState({ recommendations }: { recommendations: Marketp
       </div>
       {recommendations.length > 0 && (
         <div className="mt-8 text-left">
+          <h3 className="mb-3 text-lg font-semibold">{t("recommendations")}</h3>
           <RepoGrid repos={recommendations} />
         </div>
       )}
