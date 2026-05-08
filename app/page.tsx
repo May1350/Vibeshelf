@@ -16,7 +16,7 @@ import { parseMarketplaceParams } from "@/lib/marketplace/search-params";
 export default async function Home(props: PageProps<"/">) {
   const sp = await props.searchParams;
   const query = parseMarketplaceParams(sp as Record<string, string | string[] | undefined>);
-  const facets = await getMarketplaceFacets();
+  const facets = await getMarketplaceFacets(query);
   const t = await getTranslations("marketplace");
 
   return (
