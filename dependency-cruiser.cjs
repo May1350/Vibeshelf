@@ -108,10 +108,11 @@ module.exports = {
       name: "crypto-tokens-limited-import",
       severity: "error",
       from: {
-        pathNot: "^(app/\\(auth\\)/callback/|lib/pipeline/)",
+        pathNot: "^(app/\\(auth\\)/callback/|lib/pipeline/|lib/auth/)",
       },
       to: { path: "^lib/crypto/tokens" },
-      comment: "F2: tokens.ts importable only from OAuth callback and lib/pipeline/",
+      comment:
+        "F2: tokens.ts importable only from OAuth callback, lib/pipeline/, and lib/auth/ (decryptOAuthToken for user-scoped GitHub calls)",
     },
 
     // ─── Foundation rule F3 — pipeline jobs via runJob only ──────────

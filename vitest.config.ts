@@ -3,7 +3,15 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
-    alias: { "@": path.resolve(__dirname, ".") },
+    alias: {
+      "@": path.resolve(__dirname, "."),
+      // server-only throws unconditionally outside RSC; alias to next's
+      // empty stub so unit tests can import server-only modules.
+      "server-only": path.resolve(
+        __dirname,
+        "node_modules/next/dist/compiled/server-only/empty.js",
+      ),
+    },
   },
   test: {
     globalSetup: "./vitest.setup.ts",
