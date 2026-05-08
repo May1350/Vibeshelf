@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ScoreBadge } from "@/components/repo/score-badge";
 import { Badge } from "@/components/ui/badge";
+import { tagLabel } from "@/lib/marketplace/labels";
 import type { MarketplaceRepoRow } from "@/lib/marketplace/queries";
 
 export function RepoCard({
@@ -50,7 +51,7 @@ export function RepoCard({
             <ul className="flex flex-wrap gap-1" aria-label={t("topFeatures")}>
               {repo.feature_tags.slice(0, 3).map((slug) => (
                 <li key={slug}>
-                  <Badge variant="secondary">{slug}</Badge>
+                  <Badge variant="secondary">{tagLabel(slug)}</Badge>
                 </li>
               ))}
             </ul>

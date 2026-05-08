@@ -72,6 +72,14 @@
     "card": {
       "preview": "{owner}/{name} preview",
       "topFeatures": "Top features"
+    },
+    "tagsList": {
+      "heading": "Tags",
+      "kinds": {
+        "feature": "Features",
+        "tech_stack": "Tech Stack",
+        "vibecoding_tool": "Vibecoding Tools"
+      }
     }
   },
   "common": {

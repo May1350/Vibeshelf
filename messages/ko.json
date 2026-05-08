@@ -74,6 +74,14 @@
     "card": {
       "preview": "{owner}/{name} 미리보기",
       "topFeatures": "주요 기능"
+    },
+    "tagsList": {
+      "heading": "태그",
+      "kinds": {
+        "feature": "기능",
+        "tech_stack": "기술 스택",
+        "vibecoding_tool": "바이브코딩 도구"
+      }
     }
   },
   "common": {

@@ -6,6 +6,7 @@ import "server-only";
 
 import { cacheLife, cacheTag } from "next/cache";
 import { createAnonClient } from "@/lib/db";
+import { tagLabel } from "./labels";
 
 export interface MarketplaceFacets {
   categories: Record<string, number>;
@@ -29,7 +30,7 @@ export async function getMarketplaceFacets(): Promise<MarketplaceFacets> {
   return {
     categories: raw.category ?? {},
     tags: Object.entries(raw.tag ?? {})
-      .map(([slug, count]) => ({ slug, label: humanizeTagSlug(slug), count }))
+      .map(([slug, count]) => ({ slug, label: tagLabel(slug), count }))
       .sort((a, b) => b.count - a.count),
     vibecoding: raw.vibecoding ?? {},
     score_buckets: {
@@ -38,11 +39,4 @@ export async function getMarketplaceFacets(): Promise<MarketplaceFacets> {
       min_4_5: raw.score_bucket?.min_4_5 ?? 0,
     },
   };
-}
-
-function humanizeTagSlug(slug: string): string {
-  return slug
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
 }
